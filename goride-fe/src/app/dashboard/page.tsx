@@ -32,6 +32,11 @@ export default function Dashboard() {
     <main>
       <h1>Welcome, {user.name}</h1>
       <p>Roles: {user.roles.join(", ")}</p>
+      <a
+        href={`${process.env.NEXT_PUBLIC_API_URL}/logout`}
+      >
+        Log Out
+      </a>
     </main>
   );
 }
