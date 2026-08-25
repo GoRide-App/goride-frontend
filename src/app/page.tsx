@@ -38,7 +38,7 @@ export default function Home() {
           fill
           sizes="100vw"
           className="pointer-events-none select-none object-cover opacity-[0.08] blur-[2px] mix-blend-screen"
-          priority={false}
+          priority
         />
         <div className="pointer-events-none absolute -right-40 top-0 h-[520px] w-[520px] rounded-full bg-brand-400/20 blur-3xl" />
 
