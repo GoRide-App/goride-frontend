@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import AuthShell from "@/components/layout/auth-shell";
+import AuthFrame from "@/components/layout/auth-frame";
 
-/** Route group for every unauthenticated screen: /login, /signup, ... */
+/** Route group for every unauthenticated screen: /login, /signup. */
 export default function AuthLayout({ children }: { children: ReactNode }) {
-  return <AuthShell>{children}</AuthShell>;
+  return <AuthFrame tone="auth">{children}</AuthFrame>;
 }

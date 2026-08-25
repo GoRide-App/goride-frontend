@@ -1,128 +1,167 @@
 "use client";
 
-import { useState } from "react";
+import * as React from "react";
 import Link from "next/link";
-import { AuthHeader } from "@/components/layout/auth-shell";
-import { ROUTES } from "@/lib/routes";
-import type { LoginValues } from "@/types/auth";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { motion } from "framer-motion";
+import { Car, Lock, Mail, ShieldCheck, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/field";
+import { Logo } from "@/components/brand/logo";
+import { Divider } from "@/components/ui/primitives";
+import { GuestOnly } from "@/components/layout/role-guard";
+import { loginWithPassword } from "@/lib/auth/actions";
+import { errorMessage } from "@/lib/auth/identity-store";
+import { DEMO_ACCOUNTS, DEMO_PASSWORD, homeForRole, ROUTES } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 
-const inputClass =
-  "w-full rounded-xl border border-zinc-200 px-3.5 py-2.5 text-sm outline-none placeholder:text-zinc-400 focus:border-zinc-900";
+const schema = z.object({
+  email: z.string().trim().email("Enter a valid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+type FormValues = z.infer<typeof schema>;
 
-/**
- * Login — FR-AUTH-01.
- *
- * STRUCTURE ONLY. What still has to be built:
- *  - validation (email format, password min length) + inline field errors
- *  - call the login endpoint, store the session, redirect via homeForRole()
- *  - honour the `returnTo` query param when it points at an internal path
- *  - loading / disabled states on submit
- */
 export default function LoginPage() {
-  const [values, setValues] = useState<LoginValues>({ email: "", password: "" });
-  const [error, setError] = useState<string | null>(null);
+  return (
+    <GuestOnly>
+      <React.Suspense>
+        <LoginScreen />
+      </React.Suspense>
+    </GuestOnly>
+  );
+}
 
-  const onChange = (field: keyof LoginValues) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setValues((v) => ({ ...v, [field]: e.target.value }));
+function LoginScreen() {
+  const router = useRouter();
+  const search = useSearchParams();
+  const returnTo = search.get("returnTo");
+  const [serverError, setServerError] = React.useState<string | null>(null);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    // TODO: validate, then POST the credentials and redirect on success.
-  }
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: { email: "", password: "" } });
+
+  const onSubmit = async (values: FormValues) => {
+    setServerError(null);
+    try {
+      const session = await loginWithPassword(values.email, values.password);
+      router.replace(returnTo && returnTo.startsWith("/") ? returnTo : homeForRole(session.user.role));
+    } catch (e) {
+      setServerError(errorMessage(e, "Unable to sign in. Please try again."));
+    }
+  };
+
+  const fillDemo = (email: string) => {
+    setValue("email", email, { shouldValidate: true });
+    setValue("password", DEMO_PASSWORD, { shouldValidate: true });
+    setServerError(null);
+  };
 
   return (
-    <>
-      <div className="mb-8 flex items-center justify-between">
-        <span className="text-lg font-bold tracking-tight">GoRide</span>
-        <Link href={ROUTES.home} className="text-xs font-semibold text-zinc-500 hover:text-zinc-900">
-          Back
-        </Link>
-      </div>
+    <div className="flex h-full flex-col overflow-y-auto">
+      <div className="flex flex-1 flex-col px-5 pb-6 pt-6">
+        <div className="mb-8 flex items-center justify-between">
+          <Logo height={26} priority />
+          <Link href={ROUTES.home} className="text-xs font-semibold text-muted hover:text-ink">
+            Back
+          </Link>
+        </div>
 
-      <AuthHeader
-        title="Welcome back"
-        subtitle="Sign in to book a ride, go online as a driver, or manage the platform."
-      />
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
+          <h1 className="text-[26px] font-bold leading-tight tracking-tight">Welcome back 👋</h1>
+          <p className="mt-1.5 text-sm font-normal text-muted">
+            Sign in to book a ride, go online as a driver, or manage the platform — we&apos;ll take you to the right
+            place.
+          </p>
+        </motion.div>
 
-      {/* --- Email + password ------------------------------------------- */}
-      <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-[13px] font-semibold">Email</span>
-          <input
+        <motion.form
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          onSubmit={handleSubmit(onSubmit)}
+          className="mt-7 flex flex-col gap-4"
+          noValidate
+        >
+          <Input
+            label="Email"
             type="email"
             autoComplete="email"
+            inputMode="email"
             placeholder="you@example.com"
-            className={inputClass}
-            value={values.email}
-            onChange={onChange("email")}
+            leftIcon={<Mail size={17} />}
+            error={errors.email?.message}
+            {...register("email")}
           />
-          {/* TODO: <FieldError /> */}
-        </label>
-
-        <label className="flex flex-col gap-1.5">
-          <span className="flex items-center justify-between text-[13px] font-semibold">
-            Password
-            {/* TODO: point at the forgot-password route once it exists. */}
-            <span className="text-xs font-semibold text-zinc-400">Forgot password?</span>
-          </span>
-          <input
+          <Input
+            label="Password"
             type="password"
             autoComplete="current-password"
             placeholder="••••••••"
-            className={inputClass}
-            value={values.password}
-            onChange={onChange("password")}
+            leftIcon={<Lock size={17} />}
+            error={errors.password?.message}
+            {...register("password")}
           />
-        </label>
+          {serverError && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-center text-xs font-medium text-danger" role="alert">
+              {serverError}
+            </p>
+          )}
+          <Button type="submit" size="lg" loading={isSubmitting} loadingText="Signing in…">
+            Sign in
+          </Button>
+        </motion.form>
 
-        {error && (
-          <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-center text-xs font-medium text-red-600">
-            {error}
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="mt-6">
+          <Divider label="Demo accounts" />
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {DEMO_ACCOUNTS.map((a) => (
+              <button
+                key={a.role}
+                type="button"
+                onClick={() => fillDemo(a.email)}
+                className="group flex flex-col items-start gap-1 rounded-xl border border-zinc-200 bg-white p-3 text-left transition hover:border-ink hover:shadow-card"
+              >
+                <span
+                  className={cn(
+                    "flex h-7 w-7 items-center justify-center rounded-lg text-white",
+                    a.role === "Rider" ? "bg-brand-500" : a.role === "Driver" ? "bg-driver-500" : "bg-navy-900",
+                  )}
+                >
+                  {a.role === "Rider" ? <Sparkles size={14} /> : a.role === "Driver" ? <Car size={14} /> : <ShieldCheck size={14} />}
+                </span>
+                <span className="text-xs font-semibold">{a.role}</span>
+                <span className="text-[10px] font-normal leading-tight text-muted">{a.hint}</span>
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-center text-[11px] font-normal text-zinc-400">
+            Tap a role to fill the form · password <code className="rounded bg-surface-2 px-1">{DEMO_PASSWORD}</code>
           </p>
-        )}
+        </motion.div>
 
-        <button
-          type="submit"
-          className="mt-1 rounded-xl bg-zinc-900 px-4 py-3 text-sm font-semibold text-white hover:bg-zinc-800"
-        >
-          Sign in
-        </button>
-      </form>
-
-      {/* --- Identity-provider sign-in ---------------------------------- */}
-      <div className="my-6 flex items-center gap-3 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-        <span className="h-px flex-1 bg-zinc-200" />
-        or
-        <span className="h-px flex-1 bg-zinc-200" />
+        <div className="mt-auto pt-8">
+          <p className="text-center text-sm font-normal">
+            Don&apos;t have an account?{" "}
+            <Link href={ROUTES.signup} className="font-semibold text-ink underline-offset-2 hover:underline">
+              Sign up
+            </Link>
+          </p>
+          <Button href={`${ROUTES.signup}?role=Driver`} variant="driver" className="mt-4" leftIcon={<Car size={18} />}>
+            Drive with GoRide
+          </Button>
+          <p className="mt-5 text-center text-[11px] font-normal leading-relaxed text-zinc-400">
+            By continuing you agree to GoRide&apos;s <span className="font-semibold underline">Terms of Service</span>{" "}
+            and <span className="font-semibold underline">Privacy Policy</span>.
+          </p>
+        </div>
       </div>
-
-      {/* TODO: hand off to the IdP (/login?returnUrl=...) and come back to the dashboard. */}
-      <button
-        type="button"
-        className="rounded-xl border border-zinc-300 px-4 py-3 text-sm font-semibold hover:border-zinc-900"
-      >
-        Continue with GoRide ID
-      </button>
-
-      {/* --- Footer ------------------------------------------------------ */}
-      <div className="mt-auto pt-10">
-        <p className="text-center text-sm">
-          Don&apos;t have an account?{" "}
-          <Link href={ROUTES.signup} className="font-semibold underline-offset-2 hover:underline">
-            Sign up
-          </Link>
-        </p>
-        <Link
-          href={`${ROUTES.signup}?role=Driver`}
-          className="mt-4 block rounded-xl border border-zinc-300 px-4 py-3 text-center text-sm font-semibold hover:border-zinc-900"
-        >
-          Drive with GoRide
-        </Link>
-        <p className="mt-5 text-center text-[11px] leading-relaxed text-zinc-400">
-          By continuing you agree to GoRide&apos;s Terms of Service and Privacy Policy.
-        </p>
-      </div>
-    </>
+    </div>
   );
 }
