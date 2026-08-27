@@ -16,8 +16,14 @@ export async function registerAccount(payload: RegisterPayload): Promise<Session
   return session;
 }
 
-export function logout() {
-  useAuthStore.getState().setSession(null);
+// export function logout() {
+//   useAuthStore.getState().setSession(null);
+// }
+export async function logout() {
+  await fetch("https://localhost:7136/logout", {
+    method: "GET",
+    credentials: "include", // needed to send the session cookie so the backend knows which session to kill — same requirement as getMe()
+  });
 }
 
 export async function refreshCurrentUser(): Promise<User | null> {
