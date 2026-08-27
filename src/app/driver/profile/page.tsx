@@ -5,33 +5,81 @@ import Image from "next/image";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import type { DriverProfile, VehicleTypeCode } from "@/types";
-import { RoleGuard, useCurrentUser } from "@/components/layout/role-guard";
+import type { DriverProfile, User, VehicleTypeCode } from "@/types";
 import { AppShell } from "@/components/layout/app-shell";
-import { EmergencyContactsSection, ProfileScreen } from "@/components/profile/profile-screen";
+import {
+  EmergencyContactsSection,
+  ProfileScreen,
+} from "@/components/profile/profile-screen";
 import { errorMessage, identity } from "@/lib/auth/identity-store";
 import { VEHICLE_IMAGES, VEHICLE_TYPES } from "@/lib/constants";
-import { Badge, Card, SectionTitle, Skeleton, type Tone } from "@/components/ui/primitives";
+import {
+  Badge,
+  Card,
+  SectionTitle,
+  Skeleton,
+  type Tone,
+} from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { Input, Toggle } from "@/components/ui/field";
 import { toast } from "@/components/ui/toast";
 import { cn, formatDate } from "@/lib/utils";
+import { getMe } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 /** Driver profile — FR-AUTH-04 / FR-DRV-01. */
 export default function DriverProfilePage() {
-  return (
-    <RoleGuard role="Driver">
-      <DriverProfilePageInner />
-    </RoleGuard>
-  );
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getMe()
+      .then((me) => {
+        if (!me || !me.roles.includes("Driver")) {
+          router.replace("/");
+          return;
+        }
+        return identity
+          .getByEmail(me.email, me.name, "Driver")
+          .then((profile) => {
+            if (profile.role !== "Driver") {
+              router.replace("/");
+              return;
+            }
+            setUser(profile);
+          });
+      })
+      .catch(() => setError("Unable to load your driver profile."))
+      .finally(() => setLoading(false));
+  }, [router]);
+
+  if (loading) return <p>Loading...</p>;
+  if (error) return <p>{error}</p>;
+  if (!user) return null;
+
+  return <DriverProfilePageInner user={user} />;
 }
 
-function DriverProfilePageInner() {
-  const user = useCurrentUser()!;
+function DriverProfilePageInner({ user }: { user: User }) {
   return (
-    <AppShell user={user} className="max-w-3xl px-0 sm:px-4">
+    <AppShell
+      user={{
+        role: "Driver",
+        name: user.name,
+        email: user.email,
+      }}
+      className="max-w-3xl px-0 sm:px-4"
+    >
       <div className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-card">
-        <ProfileScreen user={user} tone="driver" title="Driver profile">
+        <ProfileScreen
+          user={user}
+          tone="driver"
+          title="Driver profile"
+          phoneOnly
+        >
           <VehicleSection driverId={user.id} />
           <EmergencyContactsSection user={user} />
         </ProfileScreen>
@@ -47,11 +95,20 @@ function DriverProfilePageInner() {
 const vehicleSchema = z.object({
   vehicleMake: z.string().trim().min(2, "Required"),
   vehicleModel: z.string().trim().min(1, "Required"),
-  vehiclePlate: z.string().trim().min(4, "Enter the registration number").max(12),
+  vehiclePlate: z
+    .string()
+    .trim()
+    .min(4, "Enter the registration number")
+    .max(12),
   vehicleColor: z.string().trim().min(2, "Required"),
   vehicleTypeCode: z.enum(["BIKE", "TUK", "CAR", "XL"]),
   licenseNumber: z.string().trim().min(6, "Enter your licence number"),
-  licenseExpiry: z.string().refine((v) => !!v && new Date(v) > new Date(), "Licence must be valid (future date)"),
+  licenseExpiry: z
+    .string()
+    .refine(
+      (v) => !!v && new Date(v) > new Date(),
+      "Licence must be valid (future date)",
+    ),
 });
 type VehicleValues = z.infer<typeof vehicleSchema>;
 
@@ -66,7 +123,9 @@ const STATUS_TONE: Record<DriverProfile["status"], Tone> = {
 };
 
 function VehicleSection({ driverId }: { driverId: string }) {
-  const [profile, setProfile] = React.useState<DriverProfile | null | undefined>(undefined);
+  const [profile, setProfile] = React.useState<
+    DriverProfile | null | undefined
+  >(undefined);
 
   const {
     register,
@@ -98,10 +157,16 @@ function VehicleSection({ driverId }: { driverId: string }) {
 
   const onSubmit = async (v: VehicleValues) => {
     try {
-      const saved = await identity.updateDriverProfile(driverId, { ...v, vehiclePlate: v.vehiclePlate.toUpperCase() });
+      const saved = await identity.updateDriverProfile(driverId, {
+        ...v,
+        vehiclePlate: v.vehiclePlate.toUpperCase(),
+      });
       setProfile(saved);
       reset({ ...v, vehiclePlate: saved.vehiclePlate });
-      toast.success("Vehicle updated", "Your vehicle and licence details have been saved.");
+      toast.success(
+        "Vehicle updated",
+        "Your vehicle and licence details have been saved.",
+      );
     } catch (e) {
       toast.error("Update failed", errorMessage(e));
     }
@@ -128,8 +193,8 @@ function VehicleSection({ driverId }: { driverId: string }) {
         <Card>
           <p className="text-sm font-semibold">No vehicle on file</p>
           <p className="mt-1 text-xs text-muted">
-            This driver account was created without vehicle details. Add them from driver onboarding before going
-            online.
+            This driver account was created without vehicle details. Add them
+            from driver onboarding before going online.
           </p>
         </Card>
       </section>
@@ -174,7 +239,11 @@ function VehicleSection({ driverId }: { driverId: string }) {
 
       <section className="mt-8">
         <SectionTitle>Vehicle & licence</SectionTitle>
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          className="flex flex-col gap-4"
+          noValidate
+        >
           <div>
             <p className="mb-2 text-[13px] font-semibold">Vehicle type</p>
             <div className="grid grid-cols-4 gap-2">
@@ -182,10 +251,17 @@ function VehicleSection({ driverId }: { driverId: string }) {
                 <button
                   key={vt.code}
                   type="button"
-                  onClick={() => setValue("vehicleTypeCode", vt.code as VehicleTypeCode, { shouldDirty: true, shouldValidate: true })}
+                  onClick={() =>
+                    setValue("vehicleTypeCode", vt.code as VehicleTypeCode, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    })
+                  }
                   className={cn(
                     "flex flex-col items-center gap-1 rounded-xl border-2 bg-surface-2 p-2 transition",
-                    selected === vt.code ? "border-ink bg-white" : "border-transparent hover:border-zinc-300",
+                    selected === vt.code
+                      ? "border-ink bg-white"
+                      : "border-transparent hover:border-zinc-300",
                   )}
                 >
                   <Image
@@ -202,17 +278,48 @@ function VehicleSection({ driverId }: { driverId: string }) {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Make" error={errors.vehicleMake?.message} {...register("vehicleMake")} />
-            <Input label="Model" error={errors.vehicleModel?.message} {...register("vehicleModel")} />
+            <Input
+              label="Make"
+              error={errors.vehicleMake?.message}
+              {...register("vehicleMake")}
+            />
+            <Input
+              label="Model"
+              error={errors.vehicleModel?.message}
+              {...register("vehicleModel")}
+            />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Registration no." className="uppercase" error={errors.vehiclePlate?.message} {...register("vehiclePlate")} />
-            <Input label="Colour" error={errors.vehicleColor?.message} {...register("vehicleColor")} />
+            <Input
+              label="Registration no."
+              className="uppercase"
+              error={errors.vehiclePlate?.message}
+              {...register("vehiclePlate")}
+            />
+            <Input
+              label="Colour"
+              error={errors.vehicleColor?.message}
+              {...register("vehicleColor")}
+            />
           </div>
-          <Input label="Driving licence no." error={errors.licenseNumber?.message} {...register("licenseNumber")} />
-          <Input label="Licence expiry" type="date" error={errors.licenseExpiry?.message} {...register("licenseExpiry")} />
+          <Input
+            label="Driving licence no."
+            error={errors.licenseNumber?.message}
+            {...register("licenseNumber")}
+          />
+          <Input
+            label="Licence expiry"
+            type="date"
+            error={errors.licenseExpiry?.message}
+            {...register("licenseExpiry")}
+          />
 
-          <Button type="submit" variant="driver" loading={isSubmitting} disabled={!isDirty}>
+          <Button
+            type="submit"
+            variant="driver"
+            loading={isSubmitting}
+            disabled={!isDirty}
+          >
             Save vehicle details
           </Button>
         </form>
