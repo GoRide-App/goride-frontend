@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
-import type { Role, User } from "@/types";
+import type { Role } from "@/types";
 import { logout } from "@/lib/auth/actions";
 import { ROUTES } from "@/lib/constants";
 import { Logo } from "@/components/brand/logo";
