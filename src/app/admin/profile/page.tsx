@@ -1,9 +1,21 @@
 "use client";
 
-import { CheckCircle2, KeyRound, MonitorSmartphone, ShieldCheck } from "lucide-react";
-import { RoleGuard, useCurrentUser } from "@/components/layout/role-guard";
+import { useEffect, useState } from "react";
+import {
+  CheckCircle2,
+  KeyRound,
+  MonitorSmartphone,
+  ShieldCheck,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import type { User } from "@/types";
 import { AppShell } from "@/components/layout/app-shell";
-import { NotificationPrefsSection, ProfileScreen } from "@/components/profile/profile-screen";
+import {
+  NotificationPrefsSection,
+  ProfileScreen,
+} from "@/components/profile/profile-screen";
+import { errorMessage, identity } from "@/lib/auth/identity-store";
+import { getMe } from "@/lib/api";
 import { Badge, Card, ListRow, SectionTitle } from "@/components/ui/primitives";
 import { formatDate } from "@/lib/utils";
 
@@ -20,26 +32,62 @@ const PERMISSIONS = [
  * Admins are provisioned internally, so there's no self-deactivation here.
  */
 export default function AdminProfilePage() {
-  return (
-    <RoleGuard role="Admin">
-      <AdminProfile />
-    </RoleGuard>
-  );
-}
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-function AdminProfile() {
-  const user = useCurrentUser()!;
+  useEffect(() => {
+    getMe()
+      .then((me) => {
+        if (!me || !me.roles.includes("Admin")) {
+          router.replace("/");
+          return;
+        }
+        return identity
+          .getByEmail(me.email, me.name, "Admin")
+          .then((profile) => {
+            if (profile.role !== "Admin") {
+              router.replace("/");
+              return;
+            }
+            setUser(profile);
+          });
+      })
+      .catch((e) =>
+        setError(errorMessage(e, "Unable to load your admin profile.")),
+      )
+      .finally(() => setLoading(false));
+  }, [router]);
+
+  if (loading) return <p>Loading...</p>;
+  if (error) return <p>{error}</p>;
+  if (!user) return null;
+
   return (
-    <AppShell user={user} className="max-w-3xl px-0 sm:px-4">
+    <AppShell
+      user={{ role: "Admin", name: user.name, email: user.email }}
+      className="max-w-3xl px-0 sm:px-4"
+    >
       <div className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-card">
-        <ProfileScreen user={user} tone="admin" title="Admin profile" allowDeactivate={false}>
+        <ProfileScreen
+          user={user}
+          tone="admin"
+          title="Admin profile"
+          allowDeactivate={false}
+          phoneOnly
+        >
           <section className="mt-8">
             <SectionTitle>Access</SectionTitle>
             <Card className="flex flex-col gap-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold">Platform administrator</p>
-                  <p className="text-xs text-muted">Provisioned {formatDate(user.createdAt)}</p>
+                  <p className="text-sm font-semibold">
+                    Platform administrator
+                  </p>
+                  <p className="text-xs text-muted">
+                    Provisioned {formatDate(user.createdAt)}
+                  </p>
                 </div>
                 <Badge tone="ink" dot>
                   Full access
@@ -47,8 +95,14 @@ function AdminProfile() {
               </div>
               <ul className="flex flex-col gap-2 border-t border-zinc-100 pt-3">
                 {PERMISSIONS.map((p) => (
-                  <li key={p} className="flex items-start gap-2 text-xs text-zinc-600">
-                    <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-brand-500" />
+                  <li
+                    key={p}
+                    className="flex items-start gap-2 text-xs text-zinc-600"
+                  >
+                    <CheckCircle2
+                      size={14}
+                      className="mt-0.5 shrink-0 text-brand-500"
+                    />
                     {p}
                   </li>
                 ))}
@@ -79,7 +133,8 @@ function AdminProfile() {
               />
             </Card>
             <p className="mt-3 text-[11px] text-muted">
-              Every action taken from this account is written to the audit log with your admin ID.
+              Every action taken from this account is written to the audit log
+              with your admin ID.
             </p>
           </section>
 
