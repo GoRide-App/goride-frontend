@@ -17,13 +17,13 @@ export default function Home() {
         <Logo variant="white" height={30} priority />
         <nav className="flex items-center gap-2">
           <Link
-            href={ROUTES.login}
+            href={`${process.env.NEXT_PUBLIC_API_URL}/login?returnUrl=http://localhost:3000/dashboard`}//{ROUTES.login}
             className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white/80 transition-colors hover:text-white"
           >
             Sign in
           </Link>
           <Link
-            href={ROUTES.signup}
+            href={`${process.env.NEXT_PUBLIC_API_URL}/login?returnUrl=http://localhost:3000/dashboard`}
             className="rounded-lg bg-brand-400 px-4 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-brand-300"
           >
             Sign up

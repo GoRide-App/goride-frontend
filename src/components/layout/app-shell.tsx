@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
-import type { User } from "@/types";
+import type { Role, User } from "@/types";
 import { logout } from "@/lib/auth/actions";
 import { ROUTES } from "@/lib/constants";
 import { Logo } from "@/components/brand/logo";
@@ -12,10 +12,26 @@ import { Avatar, Badge } from "@/components/ui/primitives";
 import { Toaster } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
+interface AppShellUser {
+  role: Role;
+  name: string;
+  email: string;
+  profilePhotoUrl?: string | null;
+}
+
 /** Signed-in chrome: brand header, who you are, sign out. */
-export function AppShell({ user, children, className }: { user: User; children: React.ReactNode; className?: string }) {
+export function AppShell({
+  user,
+  children,
+  className,
+}: {
+  user: AppShellUser;
+  children: React.ReactNode;
+  className?: string;
+}) {
   const router = useRouter();
-  const tone = user.role === "Driver" ? "driver" : user.role === "Admin" ? "ink" : "brand";
+  const tone =
+    user.role === "Driver" ? "driver" : user.role === "Admin" ? "ink" : "brand";
 
   return (
     <div className="flex min-h-dvh flex-col bg-surface-2">
@@ -29,8 +45,12 @@ export function AppShell({ user, children, className }: { user: User; children: 
           </Badge>
           <div className="ml-auto flex items-center gap-3">
             <span className="hidden text-right sm:block">
-              <span className="block text-[13px] font-semibold leading-tight">{user.name}</span>
-              <span className="block text-[11px] leading-tight text-muted">{user.email}</span>
+              <span className="block text-[13px] font-semibold leading-tight">
+                {user.name}
+              </span>
+              <span className="block text-[11px] leading-tight text-muted">
+                {user.email}
+              </span>
             </span>
             <Avatar name={user.name} src={user.profilePhotoUrl} size="sm" />
             <button
@@ -50,7 +70,11 @@ export function AppShell({ user, children, className }: { user: User; children: 
       </header>
 
       <Toaster position="fixed" />
-      <main className={cn("mx-auto w-full max-w-5xl flex-1 px-4 py-6", className)}>{children}</main>
+      <main
+        className={cn("mx-auto w-full max-w-5xl flex-1 px-4 py-6", className)}
+      >
+        {children}
+      </main>
     </div>
   );
 }
