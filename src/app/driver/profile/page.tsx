@@ -322,6 +322,7 @@ function VehicleForm({
     }
   };
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const selected = watch("vehicleTypeCode");
 
   return (
