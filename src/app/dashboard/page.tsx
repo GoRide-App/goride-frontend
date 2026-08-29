@@ -19,11 +19,18 @@ import {
   SectionTitle,
   StatTile,
 } from "@/components/ui/primitives";
-import { DEMO_ACCOUNTS, ROUTES, profileForRole } from "@/lib/constants";
-import { cn} from "@/lib/utils";
+import {
+  DEMO_ACCOUNTS,
+  ROUTES,
+  identityLoginUrl,
+  normalizeRole,
+  profileForRole,
+} from "@/lib/constants";
+import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getMe, MeResponse } from "@/lib/api";
+import { useAuthStore } from "@/lib/auth/session";
 
 const ROLE_CARDS: {
   role: Role;
@@ -63,14 +70,17 @@ const ROLE_CARDS: {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const hydrated = useAuthStore((state) => state.hydrated);
   const [user, setUser] = useState<MeResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!hydrated) return;
+
     getMe()
       .then((me) => {
         if (!me) {
-          router.push("/");
+          window.location.href = identityLoginUrl("/dashboard");
           return;
         }
         if (me.roles.length === 0) {
@@ -80,7 +90,7 @@ export default function DashboardPage() {
         setUser(me);
       })
       .finally(() => setLoading(false));
-  }, [router]);
+  }, [router, hydrated]);
 
   if (loading) return <p>Loading...</p>;
   if (!user) return null;
@@ -92,7 +102,10 @@ function Dashboard({ user }: { user: MeResponse }) {
   // MeResponse.roles is typed as string[] on the backend response, so it
   // needs a cast to your Role union before it can be used anywhere a Role
   // is expected (ROLE_CARDS, profileForRole, etc).
-  const role = user.roles[0] as Role;
+  const role =
+    (user.roles.map((value) => normalizeRole(value)).find(Boolean) as
+      | Role
+      | undefined) ?? "Rider";
   const myProfile = profileForRole(role);
 
   // TODO: rating / ratingCount / createdAt aren't on MeResponse — /me looks

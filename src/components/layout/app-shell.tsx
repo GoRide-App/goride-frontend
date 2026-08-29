@@ -57,10 +57,7 @@ export function AppShell({
               type="button"
               aria-label="Sign out"
               title="Sign out"
-              onClick={() => {
-                logout();
-                router.replace(ROUTES.home);
-              }}
+              onClick={() => logout()}
               className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-surface-2 hover:text-danger"
             >
               <LogOut size={18} />

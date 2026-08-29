@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuthStore } from "@/lib/auth/session";
 import type { User } from "@/types";
 import { AppShell } from "@/components/layout/app-shell";
 import {
@@ -11,26 +12,52 @@ import {
 } from "@/components/profile/profile-screen";
 import { errorMessage, identity } from "@/lib/auth/identity-store";
 import { getMe } from "@/lib/api";
+import { identityLoginUrl, normalizeRole, ROUTES } from "@/lib/constants";
 
 /** Rider profile — FR-AUTH-04 / FR-AUTH-05 / FR-AUTH-07. */
 export default function RiderProfilePage() {
   const router = useRouter();
+  const hydrated = useAuthStore((state) => state.hydrated);
   const [user, setUser] = useState<User | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!hydrated) return;
+
+    const sessionUser = useAuthStore.getState().session?.user;
+
+    if (!sessionUser) {
+      window.location.href = identityLoginUrl(ROUTES.rider.profile);
+      return;
+    }
+
     getMe()
       .then((me) => {
-        if (!me || !me.roles.includes("Rider")) {
-          router.replace("/");
+        const currentUser =
+          me ??
+          (sessionUser
+            ? {
+                userId: sessionUser.id,
+                name: sessionUser.name,
+                email: sessionUser.email,
+                roles: [sessionUser.role],
+              }
+            : null);
+
+        const normalizedRoles = (currentUser?.roles ?? []).map((value) =>
+          normalizeRole(value),
+        );
+        if (!currentUser || !normalizedRoles.includes("Rider")) {
+          router.replace(ROUTES.dashboard);
           return;
         }
+
         return identity
-          .getByEmail(me.email, me.name, "Rider")
+          .getByEmail(currentUser.email, currentUser.name, "Rider")
           .then((profile) => {
-            if (profile.role !== "Rider") {
-              router.replace("/");
+            if (normalizeRole(profile.role) !== "Rider") {
+              router.replace(ROUTES.dashboard);
               return;
             }
             setUser(profile);
@@ -40,7 +67,7 @@ export default function RiderProfilePage() {
         setError(errorMessage(e, "Unable to load your rider profile.")),
       )
       .finally(() => setLoading(false));
-  }, [router]);
+  }, [router, hydrated]);
 
   if (loading) return <p>Loading...</p>;
   if (error) return <p>{error}</p>;
