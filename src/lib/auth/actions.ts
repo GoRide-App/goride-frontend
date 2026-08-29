@@ -20,10 +20,12 @@ export async function registerAccount(payload: RegisterPayload): Promise<Session
 //   useAuthStore.getState().setSession(null);
 // }
 export async function logout() {
-  await fetch("https://localhost:7136/logout", {
-    method: "GET",
-    credentials: "include", // needed to send the session cookie so the backend knows which session to kill — same requirement as getMe()
-  });
+  // await fetch("https://localhost:7136/logout", {
+  //   method: "GET",
+  //   credentials: "include", // needed to send the session cookie so the backend knows which session to kill — same requirement as getMe()
+  // });
+  useAuthStore.getState().setSession(null);
+  window.location.href = "https://localhost:7136/logout";
 }
 
 export async function refreshCurrentUser(): Promise<User | null> {

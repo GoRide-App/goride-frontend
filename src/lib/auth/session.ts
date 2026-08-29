@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { Role, Session, User } from "@/types";
+import { normalizeRole } from "@/lib/constants";
 
 interface AuthState {
   session: Session | null;
@@ -24,10 +25,20 @@ export const useAuthStore = create<AuthState>()(
       session: null,
       hydrated: false,
       setSession: (session) => {
-        writeRoleCookie(session?.user.role ?? null);
-        set({ session });
+        const normalized = session
+          ? {
+              ...session,
+              user: {
+                ...session.user,
+                role: normalizeRole(session.user.role) ?? session.user.role,
+              },
+            }
+          : null;
+        writeRoleCookie(normalized?.user.role ?? null);
+        set({ session: normalized });
       },
-      setUser: (user) => set((st) => (st.session ? { session: { ...st.session, user } } : st)),
+      setUser: (user) =>
+        set((st) => (st.session ? { session: { ...st.session, user } } : st)),
       setHydrated: (hydrated) => set({ hydrated }),
     }),
     {
@@ -35,8 +46,23 @@ export const useAuthStore = create<AuthState>()(
       storage: createJSONStorage(() => sessionStorage),
       partialize: (s) => ({ session: s.session }),
       onRehydrateStorage: () => (state) => {
-        state?.setHydrated(true);
-        writeRoleCookie(state?.session?.user.role ?? null);
+        if (!state) return;
+
+        const normalizedSession = state.session
+          ? {
+              ...state.session,
+              user: {
+                ...state.session.user,
+                role:
+                  normalizeRole(state.session.user.role) ??
+                  state.session.user.role,
+              },
+            }
+          : null;
+
+        if (normalizedSession) state.setSession(normalizedSession);
+        state.setHydrated(true);
+        writeRoleCookie(normalizedSession?.user.role ?? null);
       },
     },
   ),
@@ -44,7 +70,8 @@ export const useAuthStore = create<AuthState>()(
 
 function writeRoleCookie(role: Role | null) {
   if (typeof document === "undefined") return;
-  if (role) document.cookie = `goride_role=${role}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax`;
+  if (role)
+    document.cookie = `goride_role=${role}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax`;
   else document.cookie = "goride_role=; path=/; max-age=0";
 }
 
