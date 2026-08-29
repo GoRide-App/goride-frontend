@@ -285,6 +285,7 @@ export async function getMe(): Promise<MeResponse | null> {
 
   const res = await fetch(`${API_URL}/api/me`, {
     credentials: "include", // sends the app_session cookie cross-origin
+    cache: 'no-store',
   });
 
   if (res.status === 401) return null;

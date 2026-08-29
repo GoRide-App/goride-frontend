@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Car, MapPin, ShieldCheck, Wallet } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
-import { identityLoginUrl, ROUTES } from "@/lib/constants";
+import { identityLoginUrl} from "@/lib/constants";
 
 const FEATURES = [
   {
