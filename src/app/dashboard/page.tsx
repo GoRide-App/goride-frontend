@@ -60,9 +60,9 @@ const ROLE_CARDS: {
   },
   {
     role: "Admin",
-    href: ROUTES.admin.profile,
-    title: "Admin profile",
-    description: "Operator account, granted permissions and security settings.",
+    href: ROUTES.admin.home,
+    title: "Admin console",
+    description: "Driver accounts, verification queue and operations dashboard.",
     icon: <ShieldCheck size={18} />,
     accent: "bg-navy-900",
   },
@@ -89,10 +89,13 @@ export default function DashboardPage() {
         }
         setUser(me);
       })
+      .catch(() => {
+        window.location.href = identityLoginUrl("/dashboard");
+      })
       .finally(() => setLoading(false));
   }, [router, hydrated]);
 
-  if (loading) return <p>Loading...</p>;
+  if (loading) return <div className="p-8 text-sm font-semibold">Loading dashboard…</div>;
   if (!user) return null;
 
   return <Dashboard user={user} />;

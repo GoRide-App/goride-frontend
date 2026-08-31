@@ -10,7 +10,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/auth/session";
 import type { User } from "@/types";
-import { AppShell } from "@/components/layout/app-shell";
+import { useSetAdminHeader } from "@/components/admin/admin-shell";
 import {
   NotificationPrefsSection,
   ProfileScreen,
@@ -87,16 +87,14 @@ export default function AdminProfilePage() {
       .finally(() => setLoading(false));
   }, [router, hydrated]);
 
-  if (loading) return <p>Loading...</p>;
-  if (error) return <p>{error}</p>;
+  useSetAdminHeader("Admin profile", "Operator account details & permissions");
+
+  if (loading) return <p className="p-4 text-sm text-muted">Loading profile...</p>;
+  if (error) return <p className="p-4 text-sm text-red-600">{error}</p>;
   if (!user) return null;
 
   return (
-    <AppShell
-      user={{ role: "Admin", name: user.name, email: user.email }}
-      className="max-w-3xl px-0 sm:px-4"
-    >
-      <div className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-card">
+    <div className="max-w-3xl mx-auto overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-card">
         <ProfileScreen
           user={user}
           tone="admin"
@@ -168,6 +166,5 @@ export default function AdminProfilePage() {
           <NotificationPrefsSection user={user} />
         </ProfileScreen>
       </div>
-    </AppShell>
   );
 }

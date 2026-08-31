@@ -1,6 +1,6 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-import type { DriverProfile, Session, User, VehicleTypeCode } from "@/types";
+import type { DriverProfile, DriverStatus, Session, User, VehicleTypeCode } from "@/types";
 import { useAuthStore } from "@/lib/auth/session";
 import { normalizeRole } from "@/lib/constants";
 
@@ -283,17 +283,22 @@ export async function getMe(): Promise<MeResponse | null> {
 
   if (!API_URL) return null;
 
-  const res = await fetch(`${API_URL}/api/me`, {
-    credentials: "include", // sends the app_session cookie cross-origin
-    cache: 'no-store',
-  });
+  try {
+    const res = await fetch(`${API_URL}/api/me`, {
+      credentials: "include", // sends the app_session cookie cross-origin
+      cache: "no-store",
+    });
 
-  if (res.status === 401) return null;
-  if (!res.ok) throw new Error("Failed to fetch user");
+    if (res.status === 401) return null;
+    if (!res.ok) return null;
 
-  const me = (await res.json()) as MeResponse;
-  useAuthStore.getState().setSession(buildSessionFromMe(me));
-  return me;
+    const me = (await res.json()) as MeResponse;
+    useAuthStore.getState().setSession(buildSessionFromMe(me));
+    return me;
+  } catch (err) {
+    console.error("Failed to fetch user session from backend:", err);
+    return null;
+  }
 }
 
 export async function getDriverProfile(
@@ -335,4 +340,77 @@ export async function updatePhoneNumber(phoneNumber: string): Promise<void> {
   });
 
   if (!res.ok) throw new Error("Failed to update phone number");
+}
+
+/* ------------------------------------------------------------------ */
+/* Admin Driver Account Management                                     */
+/* ------------------------------------------------------------------ */
+
+export interface DriverAccountAdminDto {
+  driverId: string;
+  vehicleMake: string;
+  vehicleModel: string;
+  vehiclePlate: string;
+  vehicleTypeCode: VehicleTypeCode;
+  licenseNumber: string;
+  licenseExpiry: string;
+  status: DriverStatus;
+  statusReason?: string | null;
+  verifiedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function getAdminDrivers(
+  status?: string,
+): Promise<DriverAccountAdminDto[]> {
+  if (!API_URL) return [];
+  const url = new URL(`${API_URL}/api/admin/drivers`);
+  if (status && status !== "all" && status !== "queue") {
+    url.searchParams.set("status", status);
+  }
+  const res = await fetch(url.toString(), {
+    credentials: "include",
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error("Failed to fetch driver accounts");
+  return (await res.json()) as DriverAccountAdminDto[];
+}
+
+export async function getAdminDriverById(
+  driverId: string,
+): Promise<DriverAccountAdminDto | null> {
+  if (!API_URL) return null;
+  const res = await fetch(
+    `${API_URL}/api/admin/drivers/${encodeURIComponent(driverId)}`,
+    {
+      credentials: "include",
+      cache: "no-store",
+    },
+  );
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error("Failed to fetch driver details");
+  return (await res.json()) as DriverAccountAdminDto;
+}
+
+export async function updateAdminDriverStatus(
+  driverId: string,
+  status: DriverStatus,
+  reason: string,
+): Promise<DriverAccountAdminDto> {
+  if (!API_URL) throw new Error("API URL is not configured");
+  const res = await fetch(
+    `${API_URL}/api/admin/drivers/${encodeURIComponent(driverId)}/status`,
+    {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status, reason }),
+    },
+  );
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => "");
+    throw new Error(errorText || "Failed to update driver status");
+  }
+  return (await res.json()) as DriverAccountAdminDto;
 }

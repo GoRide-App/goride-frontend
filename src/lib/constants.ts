@@ -1,4 +1,4 @@
-import type { Role, VehicleTypeCode } from "@/types";
+import type { DriverStatus, Role, VehicleTypeCode } from "@/types";
 
 export const APP_NAME = "GoRide";
 export const APP_TAGLINE = "Your ride, on your terms.";
@@ -10,11 +10,16 @@ export const ROUTES = {
   dashboard: "/dashboard",
   rider: { profile: "/rider/profile" },
   driver: { profile: "/driver/profile" },
-  admin: { profile: "/admin/profile" },
+  admin: {
+    home: "/admin",
+    drivers: "/admin/drivers",
+    driver: (id: string) => `/admin/drivers/${id}`,
+    profile: "/admin/profile",
+  },
 } as const;
 
 export function identityLoginUrl(returnTo?: string) {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "https://localhost:7136";
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:7136";
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const target = returnTo
     ? `${appUrl}${returnTo.startsWith("/") ? returnTo : `/${returnTo}`}`
@@ -40,8 +45,9 @@ export function normalizeRole(role?: string | null): Role | null {
 
 export function homeForRole(role?: Role) {
   switch (role) {
-    case "Driver":
     case "Admin":
+      return ROUTES.admin.home;
+    case "Driver":
     case "Rider":
     default:
       return ROUTES.dashboard;
@@ -76,6 +82,19 @@ export const VEHICLE_IMAGES: Record<VehicleTypeCode, string> = {
   TUK: "/vehicles/tuk.webp",
   CAR: "/vehicles/car.png",
   XL: "/vehicles/car.png",
+};
+
+export const DRIVER_STATUS_META: Record<
+  DriverStatus,
+  { label: string; tone: "neutral" | "brand" | "info" | "warning" | "danger" | "success" }
+> = {
+  PendingVerification: { label: "Pending verification", tone: "warning" },
+  DocumentReview: { label: "Under review", tone: "info" },
+  Active: { label: "Active", tone: "success" },
+  Rejected: { label: "Rejected", tone: "danger" },
+  Suspended: { label: "Suspended", tone: "warning" },
+  Deactivated: { label: "Deactivated", tone: "danger" },
+  Offline: { label: "Offline", tone: "neutral" },
 };
 
 /* ------------------------------------------------------------------ */
