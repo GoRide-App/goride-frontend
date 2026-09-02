@@ -41,6 +41,7 @@ export default function RiderProfilePage() {
                 userId: sessionUser.id,
                 name: sessionUser.name,
                 email: sessionUser.email,
+                phone: sessionUser.phone ?? null,
                 roles: [sessionUser.role],
               }
             : null);
@@ -60,7 +61,7 @@ export default function RiderProfilePage() {
               router.replace(ROUTES.dashboard);
               return;
             }
-            setUser(profile);
+            setUser({ ...profile, phone: currentUser.phone ?? null });
           });
       })
       .catch((e) =>
