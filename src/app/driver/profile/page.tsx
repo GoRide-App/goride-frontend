@@ -219,8 +219,8 @@ function VehicleSection({ driverId }: { driverId: string }) {
       <section className="mt-8">
         <SectionTitle>Verification</SectionTitle>
         <Card className="flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold">Account status</p>
               <p className="text-xs text-muted">
                 {profile.verifiedAt
@@ -333,7 +333,7 @@ function VehicleForm({
     >
       <div>
         <p className="mb-2 text-[13px] font-semibold">Vehicle type</p>
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {VEHICLE_TYPES.map((vehicleType) => (
             <button
               key={vehicleType.code}
@@ -365,7 +365,7 @@ function VehicleForm({
           ))}
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Input
           label="Make"
           error={errors.vehicleMake?.message}
@@ -377,19 +377,12 @@ function VehicleForm({
           {...register("vehicleModel")}
         />
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <Input
-          label="Registration no."
-          className="uppercase"
-          error={errors.vehiclePlate?.message}
-          {...register("vehiclePlate")}
-        />
-        <Input
-          label="Colour"
-          error={errors.vehicleColor?.message}
-          {...register("vehicleColor")}
-        />
-      </div>
+      <Input
+        label="Registration no."
+        className="uppercase"
+        error={errors.vehiclePlate?.message}
+        {...register("vehiclePlate")}
+      />
       <Input
         label="Driving licence no."
         error={errors.licenseNumber?.message}

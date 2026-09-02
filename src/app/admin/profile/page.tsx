@@ -107,8 +107,8 @@ export default function AdminProfilePage() {
           <section className="mt-8">
             <SectionTitle>Access</SectionTitle>
             <Card className="flex flex-col gap-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold">
                     Platform administrator
                   </p>
