@@ -56,7 +56,7 @@ export default function DriverProfilePage() {
     const sessionUser = useAuthStore.getState().session?.user;
 
     if (!sessionUser) {
-      window.location.href = identityLoginUrl(ROUTES.driver.profile);
+      window.location.replace(identityLoginUrl(ROUTES.driver.profile));
       return;
     }
 

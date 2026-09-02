@@ -35,7 +35,7 @@ export function RoleGuard({
   React.useEffect(() => {
     if (!hydrated) return;
     if (!session) {
-      window.location.href = identityLoginUrl(pathname);
+      window.location.replace(identityLoginUrl(pathname));
       return;
     }
     if (!allowed) router.replace(homeForRole(sessionRole ?? undefined));
