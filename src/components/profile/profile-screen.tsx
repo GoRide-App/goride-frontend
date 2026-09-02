@@ -84,8 +84,8 @@ export function ProfileScreen({
   const onSubmit = async (v: ProfileValues) => {
     try {
       if (phoneOnly) {
-        await updatePhoneNumber(v.phone);
-        const updated = { ...user, phone: v.phone };
+        const updatedPhone = await updatePhoneNumber(v.phone);
+        const updated = { ...user, phone: updatedPhone };
         setUser(updated);
         reset({ name: updated.name, phone: updated.phone ?? "" });
       } else {
@@ -138,6 +138,12 @@ export function ProfileScreen({
               {user.role}
             </Badge>
           </div>
+          <p className="mt-2 inline-flex max-w-full items-center gap-1.5 text-xs text-muted">
+            <Phone size={14} className="shrink-0" />
+            <span className="truncate">
+              {user.phone ?? "No phone number configured"}
+            </span>
+          </p>
         </div>
 
         <form
@@ -164,6 +170,7 @@ export function ProfileScreen({
           <Input
             label="Mobile number"
             type="tel"
+            placeholder="No phone number configured"
             leftIcon={<Phone size={17} />}
             error={errors.phone?.message}
             {...register("phone")}

@@ -69,6 +69,7 @@ export default function DriverProfilePage() {
                 userId: sessionUser.id,
                 name: sessionUser.name,
                 email: sessionUser.email,
+                phone: sessionUser.phone ?? null,
                 roles: [sessionUser.role],
               }
             : null);
@@ -86,6 +87,7 @@ export default function DriverProfilePage() {
           id: currentUser.userId,
           name: currentUser.name,
           email: currentUser.email,
+          phone: currentUser.phone ?? null,
           role: "Driver",
           emailVerified: true,
           phoneVerified: false,
@@ -150,7 +152,7 @@ const vehicleSchema = z.object({
     .trim()
     .min(4, "Enter the registration number")
     .max(12),
-  vehicleColor: z.string().trim().min(2, "Required"),
+  vehicleColor: z.string().optional(),
   vehicleTypeCode: z.enum(["BIKE", "TUK", "CAR", "XL"]),
   licenseNumber: z.string().trim().min(6, "Enter your licence number"),
   licenseExpiry: z

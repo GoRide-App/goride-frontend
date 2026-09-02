@@ -8,6 +8,7 @@ export interface MeResponse {
   userId: string;
   name: string;
   email: string;
+  phone: string | null;
   roles: string[];
 }
 
@@ -234,14 +235,22 @@ async function driverProfileRequest(
 export function addDriverProfile(
   values: DriverVehiclePayload,
 ): Promise<DriverProfile> {
-  return driverProfileRequest(`${API_URL}/api/driver/addProfile`, values, "POST");
+  return driverProfileRequest(
+    `${API_URL}/api/driver/addProfile`,
+    values,
+    "POST",
+  );
 }
 
 export function updateDriverProfile(
   sub: string,
   values: DriverVehiclePayload,
 ): Promise<DriverProfile> {
-  return driverProfileRequest(`${API_URL}/api/driver/update/${sub}`, values, "PUT");
+  return driverProfileRequest(
+    `${API_URL}/api/driver/update/${sub}`,
+    values,
+    "PUT",
+  );
 }
 
 function buildSessionFromMe(me: MeResponse): Session {
@@ -254,6 +263,7 @@ function buildSessionFromMe(me: MeResponse): Session {
     id: me.userId,
     name: me.name,
     email: me.email,
+    phone: me.phone,
     role: primaryRole,
     emailVerified: true,
     phoneVerified: false,
@@ -272,11 +282,12 @@ function buildSessionFromMe(me: MeResponse): Session {
 
 export async function getMe(): Promise<MeResponse | null> {
   const session = useAuthStore.getState().session;
-  if (session) {
+  if (session?.provider === "local") {
     return {
       userId: session.user.id,
       name: session.user.name,
       email: session.user.email,
+      phone: session.user.phone ?? null,
       roles: [session.user.role],
     };
   }
@@ -285,13 +296,20 @@ export async function getMe(): Promise<MeResponse | null> {
 
   const res = await fetch(`${API_URL}/api/me`, {
     credentials: "include", // sends the app_session cookie cross-origin
-    cache: 'no-store',
+    cache: "no-store",
   });
 
   if (res.status === 401) return null;
   if (!res.ok) throw new Error("Failed to fetch user");
 
-  const me = (await res.json()) as MeResponse;
+  const raw = (await res.json()) as MeResponse & {
+    phoneNumber?: string | null;
+    phone_number?: string | null;
+  };
+  const me: MeResponse = {
+    ...raw,
+    phone: raw.phone ?? raw.phoneNumber ?? raw.phone_number ?? null,
+  };
   useAuthStore.getState().setSession(buildSessionFromMe(me));
   return me;
 }
@@ -326,7 +344,9 @@ export async function selectRole(role: "Driver" | "Rider"): Promise<void> {
   if (!res.ok) throw new Error("Failed to assign role");
 }
 
-export async function updatePhoneNumber(phoneNumber: string): Promise<void> {
+export async function updatePhoneNumber(
+  phoneNumber: string,
+): Promise<string | null> {
   const res = await fetch(`${API_URL}/api/profile`, {
     method: "PATCH",
     credentials: "include",
@@ -335,4 +355,13 @@ export async function updatePhoneNumber(phoneNumber: string): Promise<void> {
   });
 
   if (!res.ok) throw new Error("Failed to update phone number");
+
+  const text = await res.text();
+  if (!text) return phoneNumber;
+
+  const response = (await JSON.parse(text)) as {
+    phone?: string | null;
+    phoneNumber?: string | null;
+  };
+  return response.phone ?? response.phoneNumber ?? phoneNumber;
 }

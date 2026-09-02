@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+// import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import type { Role } from "@/types";
 import { logout } from "@/lib/auth/actions";
@@ -29,7 +29,7 @@ export function AppShell({
   children: React.ReactNode;
   className?: string;
 }) {
-  const router = useRouter();
+  // const router = useRouter();
   const tone =
     user.role === "Driver" ? "driver" : user.role === "Admin" ? "ink" : "brand";
 
