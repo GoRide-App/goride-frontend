@@ -40,7 +40,6 @@
 //   );
 // }
 
-
 "use client";
 
 import { useState } from "react";
@@ -71,7 +70,7 @@ export default function SelectRole() {
   }
 
   return (
-    <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-[#0a0f0d] px-4 py-12">
+    <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-[#0a0f0d] px-3 py-6 sm:px-4 sm:py-12">
       {/* ambient glow */}
       <div
         aria-hidden
@@ -85,12 +84,12 @@ export default function SelectRole() {
       <div className="relative w-full max-w-4xl overflow-hidden rounded-3xl border border-white/10 bg-zinc-950/60 shadow-2xl backdrop-blur-sm">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.3fr]">
           {/* Left: context panel */}
-          <div className="flex flex-col justify-center gap-6 border-b border-white/10 p-8 lg:border-b-0 lg:border-r lg:p-10">
+          <div className="flex flex-col justify-center gap-5 border-b border-white/10 p-5 sm:gap-6 sm:p-8 lg:border-b-0 lg:border-r lg:p-10">
             <span className="inline-flex w-fit items-center rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-emerald-400">
               One-time choice
             </span>
 
-            <h1 className="text-4xl font-bold leading-[1.1] text-white">
+            <h1 className="text-3xl font-bold leading-[1.1] text-white sm:text-4xl">
               Choose your GoRide role
             </h1>
 
@@ -105,9 +104,7 @@ export default function SelectRole() {
                 className="mt-0.5 shrink-0 text-amber-400"
               />
               <p className="text-sm leading-relaxed text-amber-200/90">
-                <span className="font-semibold text-amber-300">
-                  Warning:
-                </span>{" "}
+                <span className="font-semibold text-amber-300">Warning:</span>{" "}
                 this role is locked once you sign in. Please choose carefully
                 before continuing.
               </p>
@@ -115,7 +112,7 @@ export default function SelectRole() {
           </div>
 
           {/* Right: role cards */}
-          <div className="flex flex-col gap-4 p-8 lg:p-10">
+          <div className="flex flex-col gap-4 p-5 sm:p-8 lg:p-10">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <RoleCard
                 tone="rider"
@@ -199,9 +196,7 @@ function RoleCard({
 
       <div className="flex flex-col gap-1.5">
         <h2 className="text-lg font-bold text-white">{title}</h2>
-        <p className="text-sm leading-relaxed text-zinc-400">
-          {description}
-        </p>
+        <p className="text-sm leading-relaxed text-zinc-400">{description}</p>
       </div>
 
       <button
