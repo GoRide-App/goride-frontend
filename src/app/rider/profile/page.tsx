@@ -28,7 +28,7 @@ export default function RiderProfilePage() {
     const sessionUser = useAuthStore.getState().session?.user;
 
     if (!sessionUser) {
-      window.location.href = identityLoginUrl(ROUTES.rider.profile);
+      window.location.replace(identityLoginUrl(ROUTES.rider.profile));
       return;
     }
 

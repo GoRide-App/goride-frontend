@@ -1,7 +1,7 @@
 import Image from "next/image";
-import Link from "next/link";
 import { ArrowRight, Car, MapPin, ShieldCheck, Wallet } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
+import { IdentityLink } from "@/components/auth/identity-link";
 import { identityLoginUrl } from "@/lib/constants";
 
 const FEATURES = [
@@ -29,18 +29,18 @@ export default function Home() {
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-3 py-5 sm:px-5 sm:py-6">
           <Logo variant="white" height={30} priority />
           <nav className="flex items-center gap-1 sm:gap-2">
-            <Link
+            <IdentityLink
               href={identityLoginUrl("/dashboard")}
               className="rounded-lg px-3 py-2.5 text-sm font-semibold text-white/80 transition-colors hover:text-white sm:px-4"
             >
               Sign in
-            </Link>
-            <Link
+            </IdentityLink>
+            <IdentityLink
               href={identityLoginUrl("/dashboard")}
               className="rounded-lg bg-brand-400 px-3 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-brand-300 sm:px-4"
             >
               Sign up
-            </Link>
+            </IdentityLink>
           </nav>
         </div>
       </header>
@@ -71,30 +71,30 @@ export default function Home() {
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link
+              <IdentityLink
                 href={identityLoginUrl("/dashboard")}
                 className="inline-flex items-center gap-2 rounded-xl bg-brand-400 px-5 py-3.5 text-[15px] font-semibold text-ink transition-colors hover:bg-brand-300"
               >
                 Create an account
                 <ArrowRight size={18} />
-              </Link>
-              <Link
+              </IdentityLink>
+              <IdentityLink
                 href={identityLoginUrl("/dashboard")}
                 className="inline-flex items-center gap-2 rounded-xl bg-driver-500 px-5 py-3.5 text-[15px] font-semibold text-white transition-colors hover:bg-driver-400"
               >
                 <Car size={18} />
                 Drive with GoRide
-              </Link>
+              </IdentityLink>
             </div>
 
             <p className="mt-4 text-xs text-white/50">
               Already with us?{" "}
-              <Link
+              <IdentityLink
                 href={identityLoginUrl("/dashboard")}
                 className="font-semibold text-white underline-offset-2 hover:underline"
               >
                 Sign in
-              </Link>{" "}
+              </IdentityLink>{" "}
               — use your WSO account to continue.
             </p>
           </div>

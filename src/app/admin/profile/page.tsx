@@ -46,7 +46,7 @@ export default function AdminProfilePage() {
     const sessionUser = useAuthStore.getState().session?.user;
 
     if (!sessionUser) {
-      window.location.href = identityLoginUrl(ROUTES.admin.profile);
+      window.location.replace(identityLoginUrl(ROUTES.admin.profile));
       return;
     }
 

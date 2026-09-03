@@ -60,8 +60,9 @@ export default function SelectRole() {
       // gets baked into a new token/cookie. Asgardeo's own session
       // is still active, so this is silent - no login prompt shown.
       useAuthStore.getState().setSession(null);
-      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-      window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/login?prompt=login&returnUrl=${encodeURIComponent(`${window.location.origin}/dashboard`)}`;
+      window.location.replace(
+        `${process.env.NEXT_PUBLIC_API_URL}/login?prompt=login&returnUrl=${encodeURIComponent(`${window.location.origin}/dashboard`)}`,
+      );
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (err) {
       setError("Something went wrong. Please try again.");
