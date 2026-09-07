@@ -62,7 +62,12 @@ function seed(): Db {
       user,
       password: DEMO_PASSWORD,
       contacts: [],
-      prefs: { userId: user.id, pushEnabled: true, emailEnabled: true, smsEnabled: false },
+      prefs: {
+        userId: user.id,
+        pushEnabled: true,
+        emailEnabled: true,
+        smsEnabled: false,
+      },
     };
     if (a.role === "Driver") {
       account.driver = {
@@ -133,12 +138,16 @@ export const identity = {
   async login(email: string, password: string): Promise<Session> {
     await sleep(LATENCY_MS);
     const db = read();
-    const account = db.accounts.find((a) => a.user.email === normalizeEmail(email));
+    const account = db.accounts.find(
+      (a) => a.user.email === normalizeEmail(email),
+    );
     if (!account || account.password !== password) {
       throw new AuthError("That email and password don't match an account.");
     }
     if (account.user.deactivatedAt) {
-      throw new AuthError("This account has been deactivated. Contact support to reactivate it.");
+      throw new AuthError(
+        "This account has been deactivated. Contact support to reactivate it.",
+      );
     }
     return makeSession(account.user);
   },
@@ -148,7 +157,9 @@ export const identity = {
     const db = read();
     const email = normalizeEmail(payload.email);
     if (db.accounts.some((a) => a.user.email === email)) {
-      throw new AuthError("An account with that email already exists. Try signing in instead.");
+      throw new AuthError(
+        "An account with that email already exists. Try signing in instead.",
+      );
     }
     const user: User = {
       id: uid("usr"),
@@ -166,7 +177,12 @@ export const identity = {
       user,
       password: payload.password,
       contacts: [],
-      prefs: { userId: user.id, pushEnabled: true, emailEnabled: true, smsEnabled: false },
+      prefs: {
+        userId: user.id,
+        pushEnabled: true,
+        emailEnabled: true,
+        smsEnabled: false,
+      },
     };
     if (payload.role === "Driver" && payload.vehicle) {
       account.driver = {
@@ -192,7 +208,48 @@ export const identity = {
     return find(read(), id).user;
   },
 
-  async update(id: string, patch: { name?: string; phone?: string }): Promise<User> {
+  async getByEmail(
+    email: string,
+    name = email,
+    role: Role = "Rider",
+  ): Promise<User> {
+    await sleep(80);
+    const db = read();
+    const normalizedEmail = normalizeEmail(email);
+    const account = db.accounts.find((a) => a.user.email === normalizedEmail);
+    if (!account) {
+      const user: User = {
+        id: uid("usr"),
+        name,
+        email: normalizedEmail,
+        role,
+        emailVerified: true,
+        phoneVerified: false,
+        rating: 5,
+        ratingCount: 0,
+        createdAt: new Date().toISOString(),
+      };
+      db.accounts.push({
+        user,
+        password: "",
+        contacts: [],
+        prefs: {
+          userId: user.id,
+          pushEnabled: true,
+          emailEnabled: true,
+          smsEnabled: false,
+        },
+      });
+      write(db);
+      return user;
+    }
+    return account.user;
+  },
+
+  async update(
+    id: string,
+    patch: { name?: string; phone?: string },
+  ): Promise<User> {
     await sleep(LATENCY_MS);
     const db = read();
     const account = find(db, id);
@@ -220,11 +277,15 @@ export const identity = {
     return find(read(), id).driver ?? null;
   },
 
-  async updateDriverProfile(id: string, patch: Partial<DriverProfile>): Promise<DriverProfile> {
+  async updateDriverProfile(
+    id: string,
+    patch: Partial<DriverProfile>,
+  ): Promise<DriverProfile> {
     await sleep(LATENCY_MS);
     const db = read();
     const account = find(db, id);
-    if (!account.driver) throw new AuthError("This account has no driver profile.");
+    if (!account.driver)
+      throw new AuthError("This account has no driver profile.");
     account.driver = { ...account.driver, ...patch };
     write(db);
     return account.driver;
@@ -237,18 +298,25 @@ export const identity = {
     return find(read(), userId).contacts;
   },
 
-  async addEmergencyContact(userId: string, input: Omit<EmergencyContact, "id" | "userId">): Promise<EmergencyContact> {
+  async addEmergencyContact(
+    userId: string,
+    input: Omit<EmergencyContact, "id" | "userId">,
+  ): Promise<EmergencyContact> {
     await sleep(LATENCY_MS);
     const db = read();
     const account = find(db, userId);
-    if (account.contacts.length >= 3) throw new AuthError("You can only have 3 emergency contacts.");
+    if (account.contacts.length >= 3)
+      throw new AuthError("You can only have 3 emergency contacts.");
     const contact: EmergencyContact = { id: uid("ec"), userId, ...input };
     account.contacts.push(contact);
     write(db);
     return contact;
   },
 
-  async removeEmergencyContact(userId: string, contactId: string): Promise<void> {
+  async removeEmergencyContact(
+    userId: string,
+    contactId: string,
+  ): Promise<void> {
     await sleep(LATENCY_MS);
     const db = read();
     const account = find(db, userId);
@@ -258,12 +326,17 @@ export const identity = {
 
   /* --- Notification preferences ------------------------------------- */
 
-  async getNotificationPreferences(userId: string): Promise<NotificationPreferences> {
+  async getNotificationPreferences(
+    userId: string,
+  ): Promise<NotificationPreferences> {
     await sleep(80);
     return find(read(), userId).prefs;
   },
 
-  async updateNotificationPreferences(userId: string, patch: Partial<NotificationPreferences>): Promise<NotificationPreferences> {
+  async updateNotificationPreferences(
+    userId: string,
+    patch: Partial<NotificationPreferences>,
+  ): Promise<NotificationPreferences> {
     await sleep(160);
     const db = read();
     const account = find(db, userId);
@@ -274,7 +347,10 @@ export const identity = {
 };
 
 /** Turn any thrown value into something safe to show a user. */
-export function errorMessage(e: unknown, fallback = "Something went wrong. Please try again.") {
+export function errorMessage(
+  e: unknown,
+  fallback = "Something went wrong. Please try again.",
+) {
   if (e instanceof AuthError) return e.message;
   if (e instanceof Error && e.message) return e.message;
   return fallback;
