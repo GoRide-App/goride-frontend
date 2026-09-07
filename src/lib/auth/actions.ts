@@ -31,7 +31,8 @@ export async function logout() {
     return;
   }
   useAuthStore.getState().setSession(null);
-  window.location.href = `${apiUrl}/logout`;
+  const cleanApiUrl = apiUrl.replace(/\/+$/, "");
+  window.location.href = `${cleanApiUrl}/logout`;
 }
 
 export async function refreshCurrentUser(): Promise<User | null> {
