@@ -41,33 +41,33 @@ const ROLE_CARDS: {
   icon: React.ReactNode;
   accent: string;
 }[] = [
-  {
-    role: "Rider",
-    href: ROUTES.rider.profile,
-    title: "Rider profile",
-    description:
-      "Personal details, emergency contacts and notification preferences.",
-    icon: <Sparkles size={18} />,
-    accent: "bg-brand-500",
-  },
-  {
-    role: "Driver",
-    href: ROUTES.driver.profile,
-    title: "Driver profile",
-    description:
-      "Vehicle, licence and verification status alongside your details.",
-    icon: <Car size={18} />,
-    accent: "bg-driver-500",
-  },
-  {
-    role: "Admin",
-    href: ROUTES.admin.profile,
-    title: "Admin profile",
-    description: "Operator account, granted permissions and security settings.",
-    icon: <ShieldCheck size={18} />,
-    accent: "bg-navy-900",
-  },
-];
+    {
+      role: "Rider",
+      href: ROUTES.rider.profile,
+      title: "Rider profile",
+      description:
+        "Personal details, emergency contacts and notification preferences.",
+      icon: <Sparkles size={18} />,
+      accent: "bg-brand-500",
+    },
+    {
+      role: "Driver",
+      href: ROUTES.driver.profile,
+      title: "Driver profile",
+      description:
+        "Vehicle, licence and verification status alongside your details.",
+      icon: <Car size={18} />,
+      accent: "bg-driver-500",
+    },
+    {
+      role: "Admin",
+      href: ROUTES.admin.profile,
+      title: "Admin profile",
+      description: "Operator account, granted permissions and security settings.",
+      icon: <ShieldCheck size={18} />,
+      accent: "bg-navy-900",
+    },
+  ];
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -84,6 +84,25 @@ export default function DashboardPage() {
           window.location.replace(identityLoginUrl("/dashboard"));
           return;
         }
+        const userRole = (normalizeRole(me.roles[0]) ?? "Rider") as Role;
+        useAuthStore.getState().setSession({
+          user: {
+            id: me.userId,
+            email: me.email ?? "",
+            name: me.name ?? "User",
+            role: userRole,
+            phone: me.phone ?? undefined,
+            emailVerified: false,
+            phoneVerified: false,
+            rating: 0,
+            ratingCount: 0,
+            createdAt: ""
+          },
+          accessToken: "",
+          expiresAt: Date.now() + 8 * 3600 * 1000,
+          provider: "oidc",
+        });
+
         if (me.roles.length === 0) {
           router.push("/onboarding/select-role");
           return;
@@ -118,33 +137,33 @@ function Dashboard({ user }: { user: MeResponse }) {
   const stats =
     role === "Driver"
       ? [
-          {
-            label: "Trips this week",
-            value: 27,
-            sub: "18 completed · 2 cancelled",
-          },
-          { label: "Rating", value: "—", sub: "—" },
-          { label: "Status", value: "Verified", sub: "Documents approved" },
-        ]
+        {
+          label: "Trips this week",
+          value: 27,
+          sub: "18 completed · 2 cancelled",
+        },
+        { label: "Rating", value: "—", sub: "—" },
+        { label: "Status", value: "Verified", sub: "Documents approved" },
+      ]
       : role === "Admin"
         ? [
-            {
-              label: "Drivers online",
-              value: 42,
-              sub: "6 pending verification",
-            },
-            { label: "Open SOS", value: 0, sub: "3 complaints open" },
-            { label: "Trips today", value: 318, sub: "291 completed" },
-          ]
+          {
+            label: "Drivers online",
+            value: 42,
+            sub: "6 pending verification",
+          },
+          { label: "Open SOS", value: 0, sub: "3 complaints open" },
+          { label: "Trips today", value: 318, sub: "291 completed" },
+        ]
         : [
-            {
-              label: "Trips taken",
-              value: "—",
-              sub: "Across all vehicle types",
-            },
-            { label: "Rating", value: "—", sub: "—" },
-            { label: "Member since", value: "—", sub: "Thanks for riding" },
-          ];
+          {
+            label: "Trips taken",
+            value: "—",
+            sub: "Across all vehicle types",
+          },
+          { label: "Rating", value: "—", sub: "—" },
+          { label: "Member since", value: "—", sub: "Thanks for riding" },
+        ];
 
   return (
     // NOTE: AppShell still expects a full `User` (id, role, emailVerified,

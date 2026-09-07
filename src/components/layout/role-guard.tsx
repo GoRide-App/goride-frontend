@@ -23,6 +23,8 @@ export function RoleGuard({
   const pathname = usePathname();
   const hydrated = useAuthStore((s) => s.hydrated);
   const session = useAuthStore((s) => s.session);
+  const [checkingServer, setCheckingServer] = React.useState(false);
+
   const sessionRole = session ? normalizeRole(session.user.role) : null;
   const roles = React.useMemo(
     () =>
@@ -34,15 +36,51 @@ export function RoleGuard({
 
   React.useEffect(() => {
     if (!hydrated) return;
-    if (!session) {
-      window.location.replace(identityLoginUrl(pathname));
+
+    if (!session && !checkingServer) {
+      setCheckingServer(true);
+      import("@/lib/api")
+        .then(({ getMe }) => getMe())
+        .then((me) => {
+          if (me) {
+            const userRole = (normalizeRole(me.roles[0]) ?? "Rider") as Role;
+            useAuthStore.getState().setSession({
+              user: {
+                id: me.userId,
+                email: me.email ?? "",
+                name: me.name ?? "User",
+                role: userRole,
+                phone: me.phone ?? undefined,
+                emailVerified: false,
+                phoneVerified: false,
+                rating: 0,
+                ratingCount: 0,
+                createdAt: ""
+              },
+              accessToken: "",
+              expiresAt: Date.now() + 8 * 3600 * 1000,
+              provider: "oidc",
+            });
+            if (me.roles.length === 0) {
+              router.replace("/onboarding/select-role");
+            }
+          } else {
+            window.location.replace(identityLoginUrl(pathname));
+          }
+        })
+        .catch(() => {
+          window.location.replace(identityLoginUrl(pathname));
+        });
       return;
     }
-    if (!allowed) router.replace(homeForRole(sessionRole ?? undefined));
-  }, [hydrated, session, allowed, router, pathname, sessionRole]);
 
-  if (!hydrated || !session || !allowed)
-    return <FullScreenLoader label={!hydrated ? "Loading…" : "Redirecting…"} />;
+    if (session && !allowed) {
+      router.replace(homeForRole(sessionRole ?? undefined));
+    }
+  }, [hydrated, session, allowed, router, pathname, sessionRole, checkingServer]);
+
+  if (!hydrated || checkingServer || !session || !allowed)
+    return <FullScreenLoader label={!hydrated || checkingServer ? "Loading…" : "Redirecting…"} />;
   return <>{children}</>;
 }
 
