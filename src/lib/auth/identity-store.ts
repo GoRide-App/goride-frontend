@@ -81,6 +81,7 @@ function seed(): Db {
         licenseExpiry: "2029-04-30",
         status: "Active",
         verifiedAt: now,
+        documents: [],
         online: false,
       };
     }
@@ -195,6 +196,7 @@ export const identity = {
         licenseNumber: payload.vehicle.licenseNumber,
         licenseExpiry: payload.vehicle.licenseExpiry,
         status: "PendingVerification",
+        documents: [],
         online: false,
       };
     }
