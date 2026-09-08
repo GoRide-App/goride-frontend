@@ -43,15 +43,17 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Car, ShieldCheck, User } from "lucide-react";
+import { AlertTriangle, ShieldCheck, User } from "lucide-react";
 import { selectRole } from "../../../lib/api";
 import { useAuthStore } from "@/lib/auth/session";
 
+// Only the Rider (SCRUM-54 fare-estimate) slice is implemented right now --
+// Driver onboarding comes back once the driver-facing stories are built.
 export default function SelectRole() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSelect(role: "Driver" | "Rider") {
+  async function handleSelect(role: "Rider") {
     setSubmitting(true);
     setError(null);
     try {
@@ -113,26 +115,17 @@ export default function SelectRole() {
             </div>
           </div>
 
-          {/* Right: role cards */}
+          {/* Right: role card */}
           <div className="flex flex-col gap-4 p-5 sm:p-8 lg:p-10">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4">
               <RoleCard
                 tone="rider"
                 icon={<User size={22} />}
                 title="Rider"
-                description="Book rides, track your trip, and manage travel details from one place."
+                description="Pick a start and destination and see vehicle types with the calculated fare."
                 ctaLabel="Continue as Rider"
                 disabled={submitting}
                 onSelect={() => handleSelect("Rider")}
-              />
-              <RoleCard
-                tone="driver"
-                icon={<Car size={22} />}
-                title="Driver"
-                description="Accept rides, manage your vehicle info, and go online when you are ready."
-                ctaLabel="Continue as Driver"
-                disabled={submitting}
-                onSelect={() => handleSelect("Driver")}
               />
             </div>
 

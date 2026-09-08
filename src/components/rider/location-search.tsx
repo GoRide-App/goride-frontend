@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { motion } from "framer-motion";
-import { Clock, LocateFixed, MapPin, MapPinned, Search, X } from "lucide-react";
+import { Clock, MapPin, Search, X } from "lucide-react";
 import type { Place } from "@/types";
 import { searchPlaces } from "@/lib/geo/providers";
 import { PLACES } from "@/lib/mock/seed";
@@ -34,8 +34,6 @@ export function SuggestionList({
   loading,
   onPick,
   recents,
-  onUseCurrent,
-  onSetOnMap,
   emptyQuery,
   className,
 }: {
@@ -43,29 +41,12 @@ export function SuggestionList({
   loading?: boolean;
   onPick: (p: Place) => void;
   recents?: Place[];
-  onUseCurrent?: () => void;
-  onSetOnMap?: () => void;
   emptyQuery?: boolean;
   className?: string;
 }) {
-  const showQuick = emptyQuery && (onUseCurrent || onSetOnMap);
   const list = emptyQuery ? (recents ?? []) : items;
   return (
     <div className={cn("flex flex-col", className)}>
-      {showQuick && (
-        <div className="mb-1 flex gap-2">
-          {onUseCurrent && (
-            <button type="button" onClick={onUseCurrent} className="flex flex-1 items-center gap-2 rounded-xl bg-brand-50 px-3 py-2.5 text-left text-xs font-semibold text-brand-800 transition hover:bg-brand-100">
-              <LocateFixed size={16} /> Use current location
-            </button>
-          )}
-          {onSetOnMap && (
-            <button type="button" onClick={onSetOnMap} className="flex flex-1 items-center gap-2 rounded-xl bg-surface-2 px-3 py-2.5 text-left text-xs font-semibold transition hover:bg-surface-3">
-              <MapPinned size={16} /> Set on map
-            </button>
-          )}
-        </div>
-      )}
       {loading && (
         <div className="flex items-center gap-2 px-1 py-3 text-xs text-muted">
           <Spinner className="h-4 w-4" /> Searching…

@@ -1,12 +1,13 @@
 /**
- * Maps / geocoding / routing providers.
+ * Places search — the only piece of this the SCRUM-54 slice actually uses,
+ * for picking pickup/destination coordinates without a map: Nominatim
+ * (Sri Lanka-bounded) + a local landmark list, so it still works offline.
  *
- * The SRS (§6.3) allows a third-party provider "or a reasonable mock of one".
- * We use free OSM services when reachable and fall back to local data so the
- * app is always demoable offline:
- *   • Places search  → Nominatim (Sri Lanka-bounded) + local landmark list
- *   • Reverse geocode → Nominatim + nearest local landmark
- *   • Routing        → OSRM demo server + synthetic curve fallback
+ * `getRoute` / `isInsideServiceArea` stay here only because
+ * lib/mock/world.ts's (currently unreachable) driver-movement simulation
+ * still imports them -- not part of the live UI. Reverse geocoding and
+ * browser geolocation were removed with the map/live-location UI they
+ * existed to support.
  */
 import type { LatLng, Place } from "@/types";
 import { PLACES } from "@/lib/mock/seed";
@@ -63,28 +64,6 @@ export async function searchPlaces(query: string): Promise<Place[]> {
   }
 }
 
-export async function reverseGeocode(pos: LatLng): Promise<Place> {
-  const nearest = [...PLACES].sort((a, b) => haversineKm(a, pos) - haversineKm(b, pos))[0];
-  const nearestKm = haversineKm(nearest, pos);
-  if (!ONLINE_PROVIDERS) return fallbackPlace(pos, nearest, nearestKm);
-  try {
-    const url = `${NOMINATIM}/reverse?format=jsonv2&lat=${pos.lat}&lon=${pos.lng}&zoom=17`;
-    const res = await fetch(url, { headers: { Accept: "application/json" } });
-    if (!res.ok) return fallbackPlace(pos, nearest, nearestKm);
-    const r = (await res.json()) as NominatimResult;
-    if (!r?.display_name) return fallbackPlace(pos, nearest, nearestKm);
-    const p = toPlace(r);
-    return { ...p, lat: pos.lat, lng: pos.lng };
-  } catch {
-    return fallbackPlace(pos, nearest, nearestKm);
-  }
-}
-
-function fallbackPlace(pos: LatLng, nearest: Place, km: number): Place {
-  if (km < 0.35) return { ...nearest, lat: pos.lat, lng: pos.lng };
-  return { name: "Pinned location", address: `Near ${nearest.name}`, lat: pos.lat, lng: pos.lng };
-}
-
 export interface RouteResult {
   geometry: LatLng[];
   distanceKm: number;
@@ -118,28 +97,4 @@ export async function getRoute(points: LatLng[]): Promise<RouteResult> {
 
 export function isInsideServiceArea(p: LatLng) {
   return haversineKm(p, SERVICE_AREA.center) <= SERVICE_AREA.radiusKm;
-}
-
-/** Browser geolocation wrapped in a promise with a sane Colombo fallback. */
-export function getCurrentPosition(timeoutMs = 6000): Promise<{ pos: LatLng; source: "gps" | "fallback" }> {
-  return new Promise((resolve) => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      resolve({ pos: PLACES[0], source: "fallback" });
-      return;
-    }
-    const timer = setTimeout(() => resolve({ pos: PLACES[0], source: "fallback" }), timeoutMs);
-    navigator.geolocation.getCurrentPosition(
-      (p) => {
-        clearTimeout(timer);
-        const pos = { lat: p.coords.latitude, lng: p.coords.longitude };
-        // Demo safety: if the browser is outside the service area, snap to Colombo
-        resolve(isInsideServiceArea(pos) ? { pos, source: "gps" } : { pos: PLACES[0], source: "fallback" });
-      },
-      () => {
-        clearTimeout(timer);
-        resolve({ pos: PLACES[0], source: "fallback" });
-      },
-      { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 30_000 },
-    );
-  });
 }
