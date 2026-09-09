@@ -504,3 +504,48 @@ export function TopBar({
     </header>
   );
 }
+
+/* ------------------------------------------------------------------ */
+/* Rating stars (interactive) + route rail                              */
+/* ------------------------------------------------------------------ */
+
+export function RatingStars({ value, onChange, size = 28, readOnly, className }: { value: number; onChange?: (v: number) => void; size?: number; readOnly?: boolean; className?: string }) {
+  const [hover, setHover] = React.useState(0);
+  const shown = hover || value;
+  return (
+    <div className={cn("inline-flex items-center gap-1", className)} role={readOnly ? undefined : "radiogroup"}>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <button
+          key={i}
+          type="button"
+          disabled={readOnly}
+          role={readOnly ? undefined : "radio"}
+          aria-checked={value === i}
+          aria-label={`${i} star${i > 1 ? "s" : ""}`}
+          onMouseEnter={() => !readOnly && setHover(i)}
+          onMouseLeave={() => setHover(0)}
+          onClick={() => onChange?.(i)}
+          className={cn("transition-transform", !readOnly && "hover:scale-110 active:scale-95")}
+        >
+          <Star size={size} className={cn("transition-colors", i <= shown ? "fill-amber-400 text-amber-400" : "fill-zinc-200 text-zinc-200")} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function RouteRail({ className, stops = 0, dashed }: { className?: string; stops?: number; dashed?: boolean }) {
+  return (
+    <div className={cn("flex flex-col items-center self-stretch py-[18px]", className)} aria-hidden>
+      <span className="h-2.5 w-2.5 rounded-full border-[3px] border-ink bg-white" />
+      <span className={cn("w-[3px] flex-1 bg-ink", dashed && "bg-transparent border-l-2 border-dashed border-ink w-0")} />
+      {Array.from({ length: stops }).map((_, i) => (
+        <React.Fragment key={i}>
+          <span className="h-2 w-2 rounded-full bg-ink" />
+          <span className="w-[3px] flex-1 bg-ink" />
+        </React.Fragment>
+      ))}
+      <span className="h-2.5 w-2.5 rounded-[3px] border-[3px] border-ink bg-white" />
+    </div>
+  );
+}

@@ -38,7 +38,7 @@ export function RoleGuard({
       window.location.replace(identityLoginUrl(pathname));
       return;
     }
-    if (!allowed) router.replace(homeForRole(sessionRole ?? undefined));
+    if (!allowed) router.replace(homeForRole(sessionRole ?? "Rider"));
   }, [hydrated, session, allowed, router, pathname, sessionRole]);
 
   if (!hydrated || !session || !allowed)
@@ -54,7 +54,7 @@ export function GuestOnly({ children }: { children: React.ReactNode }) {
   const sessionRole = session ? normalizeRole(session.user.role) : null;
   React.useEffect(() => {
     if (hydrated && session)
-      router.replace(homeForRole(sessionRole ?? undefined));
+      router.replace(homeForRole(sessionRole ?? "Rider"));
   }, [hydrated, session, router, sessionRole]);
   if (!hydrated) return <FullScreenLoader />;
   if (session) return <FullScreenLoader label="Redirecting…" />;
