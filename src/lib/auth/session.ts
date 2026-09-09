@@ -79,6 +79,11 @@ export function getSession(): Session | null {
   return useAuthStore.getState().session;
 }
 
+export function getAccessToken(): string | null {
+  return useAuthStore.getState().session?.accessToken ?? null;
+}
+
 export function isSessionExpired(s: Session | null) {
   return !s || (s.expiresAt > 0 && Date.now() > s.expiresAt);
 }
+

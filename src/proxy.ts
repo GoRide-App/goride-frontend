@@ -51,21 +51,35 @@ export function proxy(request: NextRequest): NextResponse {
   const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
   if (!isProtected) return NextResponse.next();
 
-  const role = request.cookies.get("goride_role")?.value ?? null;
+  // `app_session` is the backend's real (HttpOnly) auth cookie, so it's
+  // already present on the very first request after login — unlike
+  // `goride_role`, which client JS only writes after a page has loaded and
+  // called getMe(). Gating on `goride_role` here caused an infinite loop on
+  // a fresh sign-in: the first /dashboard request always has no goride_role
+  // yet, so the proxy bounced back to /login, Asgardeo silently
+  // re-authenticated via its existing SSO session, and the cycle repeated
+  // forever without client JS ever getting a chance to run and set the
+  // cookie. Reading HttpOnly cookies from middleware is fine — that
+  // restriction only applies to document.cookie in the browser.
+  const hasSession = !!request.cookies.get("app_session");
 
-  // No role cookie → no session → bounce to identity login
-  if (!role) {
+  // No session cookie at all → bounce to identity login
+  if (!hasSession) {
     // If API_URL is not configured we can't redirect properly; let the
     // client-side guard handle it rather than sending to a dead URL.
     if (!API_URL || !APP_URL) return NextResponse.next();
     return toLogin(pathname);
   }
 
-  // Role cookie present — check route-level role restrictions
+  // Session exists — check route-level role restrictions using the
+  // client-set role cookie. It may not be populated yet on the first
+  // request right after login; when absent, let the request through and
+  // defer to the client-side RoleGuard once it hydrates.
+  const role = request.cookies.get("goride_role")?.value ?? null;
   const restriction = ROLE_RESTRICTED.find((r) =>
     pathname.startsWith(r.prefix),
   );
-  if (restriction && !restriction.roles.includes(role)) {
+  if (role && restriction && !restriction.roles.includes(role)) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
