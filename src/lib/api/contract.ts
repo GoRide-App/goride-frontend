@@ -29,6 +29,8 @@ import type {
   VehicleTypeCode,
 } from "@/types";
 
+export type { FareEstimate, Trip, FareBreakdown, VehicleType } from "@/types";
+
 /* ------------------------------------------------------------------ */
 /* Payloads                                                             */
 /* ------------------------------------------------------------------ */
