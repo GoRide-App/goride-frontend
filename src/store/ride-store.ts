@@ -5,13 +5,6 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import type { FareEstimate, Place, Trip } from "@/types";
 import { api, errorMessage } from "@/lib/api/index";
 
-/**
- * Ride planning store — SCRUM-46/47/48/50/53/54 slice only: pickup/
- * destination selection (map, GPS, address search, pin-drop) through
- * vehicle-type + fare display. Nothing beyond selecting a vehicle (trip
- * request, driver matching, tracking, payment, rating, cancel, SOS) is
- * implemented yet, so this store doesn't carry state for any of it.
- */
 export type RidePhase = "plan" | "select";
 
 interface RideState {
@@ -29,7 +22,7 @@ interface RideState {
   setSelectedVehicle: (id: string) => void;
   clearError: () => void;
 
-  /** Creates a draft trip and fetches fares for it — the whole SCRUM-54 flow. */
+  /** Creates a draft trip and fetches fares for it*/
   createDraft: (riderId: string) => Promise<boolean>;
   /** Back to pickup/destination selection. */
   resetPlanning: () => void;

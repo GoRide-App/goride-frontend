@@ -22,12 +22,7 @@ const PHASE_TITLE: Record<string, string> = {
     select: "Choose a ride",
 };
 
-/**
- * Rider ride page — SCRUM-46/47/48/50/53/54 slice only: map-based pickup/
- * destination selection (GPS, address search, pin-drop) -> vehicle types +
- * calculated fare. Trip request, driver matching, live tracking, payment
- * and rating aren't implemented yet, so the flow stops at vehicle selection.
- */
+
 export default function RiderRidePage() {
     const user = useCurrentUser()!;
     const router = useRouter();

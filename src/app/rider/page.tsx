@@ -13,7 +13,7 @@ import { useSetShellHeader } from "@/components/layout/shell-header";
 import { MapView } from "@/components/map";
 import { useRideStore } from "@/store/ride-store";
 import { RECENT_PLACES } from "@/components/rider/location-search";
-import { getCurrentPosition } from "@/lib/geo/providers"; // added in SCRUM-47
+import { getCurrentPosition } from "@/lib/geo/providers";
 
 export default function RiderHomePage() {
     return (
