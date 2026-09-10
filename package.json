@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "cross-env NODE_OPTIONS=--use-system-ca next dev",
+    "verify": "node scripts/verify-auth-gate.mjs",
+    "prebuild": "npm run verify",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
