@@ -47,6 +47,8 @@ import { AlertTriangle, ShieldCheck, User } from "lucide-react";
 import { selectRole } from "../../../lib/api";
 import { useAuthStore } from "@/lib/auth/session";
 
+// Only the Rider (SCRUM-54 fare-estimate) slice is implemented right now --
+// Driver onboarding comes back once the driver-facing stories are built.
 export default function SelectRole() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);

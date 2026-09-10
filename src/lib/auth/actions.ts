@@ -46,3 +46,8 @@ export async function refreshCurrentUser(): Promise<User | null> {
     return st.session.user;
   }
 }
+
+export function syncMockIdentity() {
+  // no-op in oidc/local mode or can sync if mock mode is used
+}
+
