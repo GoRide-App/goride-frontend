@@ -12,6 +12,7 @@ export const API_MODE: "mock" | "http" = process.env.NEXT_PUBLIC_API_MODE === "h
 export const IS_MOCK = API_MODE === "mock";
 
 export type { GoRideApi, TripEvent, RegisterPayload, CreateTripPayload, DriverTripAction } from "./contract";
+export { planRide, LOCATION_API_URL } from "./location";
 
 export function errorMessage(e: unknown, fallback = "Something went wrong. Please try again.") {
   if (e && typeof e === "object" && "message" in e && typeof (e as Error).message === "string") return (e as Error).message;

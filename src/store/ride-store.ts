@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { FareEstimate, Place, Trip } from "@/types";
 import { api, errorMessage } from "@/lib/api/index";
+import { planRide } from "@/lib/api/location";
 
 export type RidePhase = "plan" | "select";
 
@@ -55,7 +56,18 @@ export const useRideStore = create<RideState>()(
         if (!pickup || !destination) return false;
         set({ busy: true, error: null });
         try {
+          // 1. Call goride-location to validate serviceable area and get road-network distance/duration & geometry
+          const plan = await planRide(pickup, destination);
+
+          // 2. Create the draft trip
           const trip = await api.trips.create({ riderId, pickup, destination });
+
+          // 3. Apply the authoritative distance, duration, and road coordinates from goride-location
+          trip.distanceKm = plan.distanceKm;
+          trip.durationMin = Math.round(plan.durationMinutes);
+          trip.routeGeometry = plan.coordinates;
+
+          // 4. Calculate vehicle fares using the exact road metrics from goride-location
           const estimates = await api.trips.estimate(trip.id);
           const selected = estimates.find((e) => e.available)?.vehicleTypeId ?? null;
           set({ trip, estimates, selectedVehicleTypeId: selected, uiPhase: "select", busy: false });

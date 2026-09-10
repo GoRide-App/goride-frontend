@@ -13,6 +13,7 @@ import { PLACES } from "@/lib/mock/seed";
 import { SERVICE_AREA } from "@/lib/constants";
 import { haversineKm, pathLengthKm, syntheticRoute } from "@/lib/utils";
 import { estimateDurationMin } from "@/lib/mock/seed";
+import { planRide } from "@/lib/api/location";
 
 const NOMINATIM = "https://nominatim.openstreetmap.org";
 const OSRM = "https://router.project-osrm.org";
@@ -98,7 +99,25 @@ export async function getRoute(points: LatLng[]): Promise<RouteResult> {
     const distanceKm = Math.round(pathLengthKm(geometry) * 1.15 * 10) / 10;
     return { geometry, distanceKm, durationMin: estimateDurationMin(distanceKm) };
   };
+
   if (!ONLINE_PROVIDERS || points.length < 2) return fallback();
+
+  // Primary: use goride-location microservice for point-to-point routing
+  if (points.length === 2) {
+    try {
+      const plan = await planRide(points[0], points[1]);
+      if (plan.coordinates && plan.coordinates.length > 0) {
+        return {
+          geometry: plan.coordinates,
+          distanceKm: plan.distanceKm,
+          durationMin: Math.round(plan.durationMinutes),
+        };
+      }
+    } catch {
+      // Fall through to OSRM / synthetic fallback if goride-location is unreachable or errors
+    }
+  }
+
   try {
     const coords = points.map((p) => `${p.lng},${p.lat}`).join(";");
     const res = await fetch(`${OSRM}/route/v1/driving/${coords}?overview=full&geometries=geojson`);
