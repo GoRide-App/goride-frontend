@@ -69,7 +69,7 @@ function subscribeHub(group: string, handler: (e: TripEvent) => void): Unsubscri
       h.on("DriverLocation", onLoc);
       h.on("OfferReceived", onOffer);
       h.on("OfferExpired", onOfferExpired);
-      await h.invoke("Subscribe", group).catch(() => {});
+      await h.invoke("Subscribe", group).catch(() => { });
     })
     .catch((e) => console.warn("[signalr] unable to connect", e));
   return () => {
@@ -79,7 +79,7 @@ function subscribeHub(group: string, handler: (e: TripEvent) => void): Unsubscri
     hub.off("DriverLocation", onLoc);
     hub.off("OfferReceived", onOffer);
     hub.off("OfferExpired", onOfferExpired);
-    hub.invoke("Unsubscribe", group).catch(() => {});
+    hub.invoke("Unsubscribe", group).catch(() => { });
   };
 }
 
@@ -99,9 +99,7 @@ export const httpApi: GoRideApi = {
     listEmergencyContacts: (userId) => http(`/users/${userId}/emergency-contacts`),
     addEmergencyContact: (userId, c) => http(`/users/${userId}/emergency-contacts`, { method: "POST", json: c }),
     removeEmergencyContact: (userId, id) => http(`/users/${userId}/emergency-contacts/${id}`, { method: "DELETE" }),
-    getNotificationPreferences(userId) {
-      return http(`/notifications/preferences/${userId}`);
-    },
+    getNotificationPreferences: (userId) => http(`/notifications/preferences/${userId}`),
     updateNotificationPreferences: (userId, prefs) => http(`/notifications/preferences/${userId}`, { method: "PUT", json: prefs }),
     listNotifications: (userId) => http(`/notifications`, { query: { userId } }),
     markNotificationRead: (id) => http(`/notifications/${id}/read`, { method: "POST" }),

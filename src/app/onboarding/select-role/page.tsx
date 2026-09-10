@@ -173,18 +173,16 @@ function RoleCard({
 
   return (
     <div
-      className={`flex flex-col gap-4 rounded-2xl border p-6 transition-colors ${
-        isRider
-          ? "border-emerald-500/20 bg-emerald-950/30 hover:border-emerald-500/40"
-          : "border-orange-500/20 bg-orange-950/20 hover:border-orange-500/40"
-      }`}
+      className={`flex flex-col gap-4 rounded-2xl border p-6 transition-colors ${isRider
+        ? "border-emerald-500/20 bg-emerald-950/30 hover:border-emerald-500/40"
+        : "border-orange-500/20 bg-orange-950/20 hover:border-orange-500/40"
+        }`}
     >
       <div
-        className={`flex h-11 w-11 items-center justify-center rounded-xl ${
-          isRider
-            ? "bg-emerald-500/15 text-emerald-400"
-            : "bg-orange-500/15 text-orange-400"
-        }`}
+        className={`flex h-11 w-11 items-center justify-center rounded-xl ${isRider
+          ? "bg-emerald-500/15 text-emerald-400"
+          : "bg-orange-500/15 text-orange-400"
+          }`}
       >
         {icon}
       </div>
@@ -198,11 +196,10 @@ function RoleCard({
         type="button"
         disabled={disabled}
         onClick={onSelect}
-        className={`mt-1 w-fit rounded-full px-4 py-2 text-xs font-bold uppercase tracking-wide transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-          isRider
-            ? "bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25"
-            : "bg-orange-500/15 text-orange-400 hover:bg-orange-500/25"
-        }`}
+        className={`mt-1 w-fit rounded-full px-4 py-2 text-xs font-bold uppercase tracking-wide transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${isRider
+          ? "bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25"
+          : "bg-orange-500/15 text-orange-400 hover:bg-orange-500/25"
+          }`}
       >
         {ctaLabel}
       </button>

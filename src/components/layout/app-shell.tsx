@@ -22,9 +22,6 @@ interface NavItem {
   exact?: boolean;
 }
 
-// Only the SCRUM-54 fare-estimate slice is live right now -- other nav
-// destinations (ride history, payments, profile, driver console, ...) come
-// back story by story as their backing services are implemented.
 const RIDER_NAV: NavItem[] = [{ href: ROUTES.rider.home, label: "Book a ride", icon: MapPin, exact: true }];
 
 export type AppShellUser = {
@@ -38,15 +35,19 @@ export type AppShellUser = {
 };
 
 /**
- * AppShell — the rider console: a permanent navy nav rail, a title bar fed
- * by `useSetShellHeader`, and a scrolling page body.
+ * AppShell — the desktop console for riders and drivers: a permanent navy nav
+ * rail, a title bar fed by `useSetShellHeader`, and either a scrolling page
+ * body (`variant="page"`) or a full-bleed region for the map split
+ * (`variant="split"`).
  */
 export function AppShell({
   user,
+  variant = "page",
   className,
   children,
 }: {
   user: AppShellUser;
+  variant?: "page" | "split";
   className?: string;
   children: React.ReactNode;
 }) {
@@ -189,9 +190,13 @@ export function AppShell({
         </header>
 
         <InShellProvider value>
-          <main className="min-h-0 flex-1 overflow-y-auto scrollbar-visible">
-            <div className={cn("mx-auto w-full max-w-[1100px] p-4 lg:p-6", className)}>{children}</div>
-          </main>
+          {variant === "split" ? (
+            <div className="relative min-h-0 flex-1 overflow-hidden">{children}</div>
+          ) : (
+            <main className="min-h-0 flex-1 overflow-y-auto scrollbar-visible">
+              <div className={cn("mx-auto w-full max-w-[1100px] p-4 lg:p-6", className)}>{children}</div>
+            </main>
+          )}
         </InShellProvider>
       </div>
 

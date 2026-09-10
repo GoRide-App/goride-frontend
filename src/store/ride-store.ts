@@ -3,14 +3,8 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { FareEstimate, Place, Trip } from "@/types";
-import { api, errorMessage } from "@/lib/api";
+import { api, errorMessage } from "@/lib/api/index";
 
-/**
- * Ride planning store — SCRUM-54 slice only: pickup/destination selection
- * through vehicle-type + fare display. Nothing beyond selecting a vehicle
- * (trip request, driver matching, tracking, payment, rating, cancel, SOS) is
- * implemented yet, so this store doesn't carry state for any of it.
- */
 export type RidePhase = "plan" | "select";
 
 interface RideState {
@@ -28,7 +22,7 @@ interface RideState {
   setSelectedVehicle: (id: string) => void;
   clearError: () => void;
 
-  /** Creates a draft trip and fetches fares for it — the whole SCRUM-54 flow. */
+  /** Creates a draft trip and fetches fares for it*/
   createDraft: (riderId: string) => Promise<boolean>;
   /** Back to pickup/destination selection. */
   resetPlanning: () => void;
@@ -49,6 +43,8 @@ export const useRideStore = create<RideState>()(
       setPickup: (pickup) => set({ pickup }),
       setDestination: (destination) => set({ destination }),
       setSelectedVehicle: (selectedVehicleTypeId) => {
+        // Only TukTuk is bookable in this stage (SCRUM-53/54) -- every
+        // other vehicle type is display-only, even though its fare is real.
         const est = get().estimates.find((e) => e.vehicleTypeId === selectedVehicleTypeId);
         if (est && est.available !== false) set({ selectedVehicleTypeId });
       },
@@ -61,7 +57,7 @@ export const useRideStore = create<RideState>()(
         try {
           const trip = await api.trips.create({ riderId, pickup, destination });
           const estimates = await api.trips.estimate(trip.id);
-          const selected = estimates.find((e) => e.available)?.vehicleTypeId ?? estimates[0]?.vehicleTypeId ?? null;
+          const selected = estimates.find((e) => e.available)?.vehicleTypeId ?? null;
           set({ trip, estimates, selectedVehicleTypeId: selected, uiPhase: "select", busy: false });
           return true;
         } catch (e) {

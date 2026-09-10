@@ -44,9 +44,9 @@ export default function DashboardPage() {
 }
 
 function Dashboard({ user }: { user: MeResponse }) {
-  // Only the rider fare-estimate slice (SCRUM-54) is live right now -- every
-  // signed-in user lands here regardless of role until driver/admin stories
-  // are implemented.
+  // Only the rider fare-estimate slice (SCRUM-46/47/48/50/53/54) is live
+  // right now -- every signed-in user lands here regardless of role until
+  // driver/admin stories are implemented.
   const role = user.roles.map(normalizeRole).find(Boolean) ?? "Rider";
 
   const stats = [

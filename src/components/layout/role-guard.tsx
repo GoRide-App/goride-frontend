@@ -30,8 +30,8 @@ export function RoleGuard({ role, children }: { role: Role | Role[]; children: R
       window.location.href = identityLoginUrl(pathname);
       return;
     }
-    if (!allowed) router.replace(homeForRole(session.user.role));
-  }, [hydrated, session, allowed, router, pathname]);
+    if (!allowed) router.replace(homeForRole(sessionRole ?? "Rider"));
+  }, [hydrated, session, allowed, router, pathname, sessionRole]);
 
   if (!hydrated || !session || !allowed) return <FullScreenLoader label={!hydrated ? "Loading…" : "Redirecting…"} />;
   return <>{children}</>;
@@ -43,8 +43,9 @@ export function GuestOnly({ children }: { children: React.ReactNode }) {
   const hydrated = useAuthStore((s) => s.hydrated);
   const session = useAuthStore((s) => s.session);
   React.useEffect(() => {
-    if (hydrated && session) router.replace(homeForRole(session.user.role));
-  }, [hydrated, session, router]);
+    if (hydrated && session)
+      router.replace(homeForRole(sessionRole ?? "Rider"));
+  }, [hydrated, session, router, sessionRole]);
   if (!hydrated) return <FullScreenLoader />;
   if (session) return <FullScreenLoader label="Redirecting…" />;
   return <>{children}</>;

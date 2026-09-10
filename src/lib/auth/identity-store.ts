@@ -37,7 +37,7 @@ interface Db {
   accounts: Account[];
 }
 
-export class AuthError extends Error {}
+export class AuthError extends Error { }
 
 /* ------------------------------------------------------------------ */
 /* Persistence                                                          */

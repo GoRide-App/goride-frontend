@@ -8,12 +8,6 @@ import type { FareEstimate, VehicleType } from "@/types";
 import { cn, formatKm, formatLKR, formatMinutes } from "@/lib/utils";
 import { VEHICLE_IMAGES } from "@/lib/constants";
 
-/**
- * SCRUM-54 slice only: trip distance/duration summary and the vehicle-type +
- * fare card. Driver info, fare breakdowns, payment rows and SOS aren't wired
- * to anything real yet, so they've been pulled out rather than left dead.
- */
-
 export function TripMeta({ distanceKm, durationMin, className }: { distanceKm: number; durationMin: number; className?: string }) {
   return (
     <div className={cn("flex items-center gap-3 text-xs font-semibold text-muted", className)}>
@@ -29,10 +23,13 @@ export function TripMeta({ distanceKm, durationMin, className }: { distanceKm: n
 }
 
 /* ------------------------------------------------------------------ */
-/* Vehicle option (theme's SelectVehicle card)                          */
+/* Vehicle option (theme's SelectVehicle card) — SCRUM-53/54             */
 /* ------------------------------------------------------------------ */
 
 export function VehicleOption({ vt, estimate, selected, onSelect, index = 0 }: { vt: VehicleType; estimate?: FareEstimate; selected: boolean; onSelect: () => void; index?: number }) {
+  // Only TukTuk is bookable in this stage -- every other vehicle type is
+  // display-only, even though its fare is real (calculated by
+  // goride-trip-matching, same as TukTuk's).
   const isTuk = vt.code === "TUK" || (vt.code as string) === "TUKTUK";
   const isAvailable = isTuk;
   const displayName = isTuk ? "Tuk Tuk" : vt.name;

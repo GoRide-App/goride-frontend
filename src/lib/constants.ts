@@ -158,11 +158,11 @@ export const VEHICLE_TYPES: {
   name: string;
   seats: number;
 }[] = [
-  { code: "BIKE", name: "Bike", seats: 1 },
-  { code: "TUK", name: "Tuk", seats: 3 },
-  { code: "CAR", name: "Car", seats: 4 },
-  { code: "XL", name: "XL", seats: 6 },
-];
+    { code: "BIKE", name: "Bike", seats: 1 },
+    { code: "TUK", name: "Tuk", seats: 3 },
+    { code: "CAR", name: "Car", seats: 4 },
+    { code: "XL", name: "XL", seats: 6 },
+  ];
 
 export const VEHICLE_IMAGES: Record<string, string> = {
   BIKE: "/vehicles/bike.webp",

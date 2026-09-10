@@ -27,12 +27,12 @@ export const useAuthStore = create<AuthState>()(
       setSession: (session) => {
         const normalized = session
           ? {
-              ...session,
-              user: {
-                ...session.user,
-                role: normalizeRole(session.user.role) ?? session.user.role,
-              },
-            }
+            ...session,
+            user: {
+              ...session.user,
+              role: normalizeRole(session.user.role) ?? session.user.role,
+            },
+          }
           : null;
         writeRoleCookie(normalized?.user.role ?? null);
         set({ session: normalized });
@@ -50,14 +50,14 @@ export const useAuthStore = create<AuthState>()(
 
         const normalizedSession = state.session
           ? {
-              ...state.session,
-              user: {
-                ...state.session.user,
-                role:
-                  normalizeRole(state.session.user.role) ??
-                  state.session.user.role,
-              },
-            }
+            ...state.session,
+            user: {
+              ...state.session.user,
+              role:
+                normalizeRole(state.session.user.role) ??
+                state.session.user.role,
+            },
+          }
           : null;
 
         if (normalizedSession) state.setSession(normalizedSession);

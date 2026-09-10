@@ -2,7 +2,7 @@ import type { AdminDashboardStats, Driver, DriverLocation, EarningsSummary, Fare
 import type { GoRideApi } from "@/lib/api/contract";
 import { ACTIVE_TRIP_STATUSES, TERMINAL_TRIP_STATUSES } from "@/lib/constants";
 import { generatePin, haversineKm, sleep, uid } from "@/lib/utils";
-import { isInsideServiceArea } from "@/lib/geo/providers";
+import { getRoute, isInsideServiceArea } from "@/lib/geo/providers";
 import { estimateFor } from "./seed";
 import { world } from "./world";
 
@@ -346,10 +346,8 @@ export const mockApi: GoRideApi = {
       await delay();
       if (!isInsideServiceArea(payload.pickup)) throw err(422, "Pickup is outside our service area (Greater Colombo).", "OUT_OF_SERVICE_AREA");
       if (!isInsideServiceArea(payload.destination)) throw err(422, "Destination is outside our service area (Greater Colombo).", "OUT_OF_SERVICE_AREA");
-      // This draft only needs an id so the UI can ask the real trip-matching
-      // service for a fare (SCRUM-54) -- no route/distance calculation
-      // belongs on the frontend yet, so this is a placeholder, not a route.
-      const placeholderDistanceKm = haversineKm(payload.pickup, payload.destination);
+      const pts = [payload.pickup, ...(payload.stops ?? []), payload.destination];
+      const route = await getRoute(pts);
       const trip: Trip = {
         id: uid("trp"),
         riderId: payload.riderId,
@@ -358,17 +356,17 @@ export const mockApi: GoRideApi = {
         vehicleTypeCode: "CAR",
         pickup: payload.pickup,
         destination: payload.destination,
-        stops: [],
+        stops: (payload.stops ?? []).map((p, i) => ({ ...p, id: uid("stp"), sequence: i + 1 })),
         status: "RIDE_DRAFT",
         estimatedFare: null,
         finalFare: null,
-        distanceKm: placeholderDistanceKm,
-        durationMin: 0,
+        distanceKm: route.distanceKm,
+        durationMin: route.durationMin,
         tripPin: null,
         matchRoundReached: 1,
         version: 0,
         createdAt: new Date().toISOString(),
-        routeGeometry: [],
+        routeGeometry: route.geometry,
       };
       world().commit("trip.create", (st) => {
         // a rider only ever has one draft at a time
@@ -377,18 +375,16 @@ export const mockApi: GoRideApi = {
       });
       return trip;
     },
-    // Not reachable from the trimmed UI (multi-stop selection isn't in the
-    // current slice), kept only to satisfy the GoRideApi contract.
     async updateStops(tripId, stops) {
       await delay();
       const t = world().trip(tripId);
-      const placeholderDistanceKm = haversineKm(t.pickup, t.destination);
+      const route = await getRoute([t.pickup, ...stops, t.destination]);
       world().commit("trip.stops", (st) => {
         const tr = st.trips.find((x) => x.id === tripId)!;
         tr.stops = stops.map((p, i) => ({ ...p, id: uid("stp"), sequence: i + 1 }));
-        tr.distanceKm = placeholderDistanceKm;
-        tr.durationMin = 0;
-        tr.routeGeometry = [];
+        tr.distanceKm = route.distanceKm;
+        tr.durationMin = route.durationMin;
+        tr.routeGeometry = route.geometry;
       });
       return world().trip(tripId);
     },
