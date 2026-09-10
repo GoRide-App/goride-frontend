@@ -274,33 +274,8 @@ export function TopBar({ title, subtitle, back, right, className, transparent, o
 }
 
 /* ------------------------------------------------------------------ */
-/* Rating stars (interactive) + route rail                              */
+/* Route rail                                                           */
 /* ------------------------------------------------------------------ */
-
-export function RatingStars({ value, onChange, size = 28, readOnly, className }: { value: number; onChange?: (v: number) => void; size?: number; readOnly?: boolean; className?: string }) {
-  const [hover, setHover] = React.useState(0);
-  const shown = hover || value;
-  return (
-    <div className={cn("inline-flex items-center gap-1", className)} role={readOnly ? undefined : "radiogroup"}>
-      {[1, 2, 3, 4, 5].map((i) => (
-        <button
-          key={i}
-          type="button"
-          disabled={readOnly}
-          role={readOnly ? undefined : "radio"}
-          aria-checked={value === i}
-          aria-label={`${i} star${i > 1 ? "s" : ""}`}
-          onMouseEnter={() => !readOnly && setHover(i)}
-          onMouseLeave={() => setHover(0)}
-          onClick={() => onChange?.(i)}
-          className={cn("transition-transform", !readOnly && "hover:scale-110 active:scale-95")}
-        >
-          <Star size={size} className={cn("transition-colors", i <= shown ? "fill-amber-400 text-amber-400" : "fill-zinc-200 text-zinc-200")} />
-        </button>
-      ))}
-    </div>
-  );
-}
 
 export function RouteRail({ className, stops = 0, dashed }: { className?: string; stops?: number; dashed?: boolean }) {
   return (
