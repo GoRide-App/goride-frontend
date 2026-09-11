@@ -14,13 +14,12 @@ export const ROUTES = {
 } as const;
 
 export function identityLoginUrl(returnTo?: string) {
-  const apiUrl = (process.env.NEXT_PUBLIC_API_URL ?? "https://localhost:7136").replace(/\/+$/, "");
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/+$/, "");
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const target = returnTo
     ? `${appUrl}${returnTo.startsWith("/") ? returnTo : `/${returnTo}`}`
     : `${appUrl}/dashboard`;
 
-  return `${apiUrl}/login?returnUrl=${encodeURIComponent(target)}`;
+  return `/login?returnUrl=${encodeURIComponent(target)}`; // relative — was `${apiUrl}/login?...`
 }
 
 /**

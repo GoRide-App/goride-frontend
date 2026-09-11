@@ -1,5 +1,3 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
-
 import type { DriverProfile, Session, User, VehicleTypeCode } from "@/types";
 import { useAuthStore } from "@/lib/auth/session";
 import { normalizeRole } from "@/lib/constants";
@@ -182,37 +180,6 @@ function driverProfileFromResponse(
   return normalizeDriverProfile(normalized, values.vehiclePlate);
 }
 
-// async function driverProfileRequest(
-//   url: string,
-//   values: DriverVehiclePayload,
-// ): Promise<DriverProfile> {
-//   const res = await fetch(url, {
-//     method: "POST",
-//     credentials: "include",
-//     headers: { "Content-Type": "application/json" },
-//     body: JSON.stringify(values),
-//   });
-
-//   if (!res.ok) throw new Error("Failed to save vehicle details");
-
-//   const text = await res.text();
-//   const response = text ? (JSON.parse(text) as Partial<DriverProfile>) : null;
-//   return driverProfileFromResponse(response, values);
-// }
-
-// export function addDriverProfile(
-//   values: DriverVehiclePayload,
-// ): Promise<DriverProfile> {
-//   return driverProfileRequest(`${API_URL}/api/driver/addProfile`, values);
-// }
-
-// export function updateDriverProfile(
-//   sub: string,
-//   values: DriverVehiclePayload,
-// ): Promise<DriverProfile> {
-//   return driverProfileRequest(`${API_URL}/api/driver/update/${sub}`, values);
-// }
-
 async function driverProfileRequest(
   url: string,
   values: DriverVehiclePayload,
@@ -220,7 +187,6 @@ async function driverProfileRequest(
 ): Promise<DriverProfile> {
   const res = await fetch(url, {
     method,
-    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(values),
   });
@@ -235,22 +201,14 @@ async function driverProfileRequest(
 export function addDriverProfile(
   values: DriverVehiclePayload,
 ): Promise<DriverProfile> {
-  return driverProfileRequest(
-    `${API_URL}/api/driver/addProfile`,
-    values,
-    "POST",
-  );
+  return driverProfileRequest(`/api/driver/addProfile`, values, "POST");
 }
 
 export function updateDriverProfile(
   sub: string,
   values: DriverVehiclePayload,
 ): Promise<DriverProfile> {
-  return driverProfileRequest(
-    `${API_URL}/api/driver/update/${sub}`,
-    values,
-    "PUT",
-  );
+  return driverProfileRequest(`/api/driver/update/${sub}`, values, "PUT");
 }
 
 function buildSessionFromMe(me: MeResponse): Session {
@@ -292,10 +250,7 @@ export async function getMe(): Promise<MeResponse | null> {
     };
   }
 
-  if (!API_URL) return null;
-
-  const res = await fetch(`${API_URL}/api/me`, {
-    credentials: "include", // sends the app_session cookie cross-origin
+  const res = await fetch(`/api/me`, {
     cache: "no-store",
   });
 
@@ -317,11 +272,7 @@ export async function getMe(): Promise<MeResponse | null> {
 export async function getDriverProfile(
   sub: string,
 ): Promise<DriverProfile | null> {
-  if (!API_URL) return null;
-
-  const res = await fetch(`${API_URL}/api/driver/${sub}`, {
-    credentials: "include",
-  });
+  const res = await fetch(`/api/driver/${sub}`);
 
   if (res.status === 401 || res.status === 404) return null;
   if (!res.ok) throw new Error("Failed to fetch driver profile");
@@ -334,9 +285,8 @@ export async function getDriverProfile(
 }
 
 export async function selectRole(role: "Driver" | "Rider"): Promise<void> {
-  const res = await fetch(`${API_URL}/api/onboarding/select-role`, {
+  const res = await fetch(`/api/onboarding/select-role`, {
     method: "POST",
-    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ role }),
   });
@@ -347,9 +297,8 @@ export async function selectRole(role: "Driver" | "Rider"): Promise<void> {
 export async function updatePhoneNumber(
   phoneNumber: string,
 ): Promise<string | null> {
-  const res = await fetch(`${API_URL}/api/profile`, {
+  const res = await fetch(`/api/profile`, {
     method: "PATCH",
-    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ phoneNumber }),
   });
