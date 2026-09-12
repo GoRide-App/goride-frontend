@@ -5,7 +5,7 @@ import type { FareEstimate, GoRideApi, Trip } from "./contract";
 import { httpApi } from "./http";
 import { mockApi } from "@/lib/mock/api";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://localhost:7136";
 const TRIP_API_URL = process.env.NEXT_PUBLIC_TRIP_API_URL ?? "http://localhost:8080";
 
 export const API_MODE: "mock" | "http" = process.env.NEXT_PUBLIC_API_MODE === "http" ? "http" : "mock";
