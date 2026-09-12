@@ -16,24 +16,13 @@ export async function registerAccount(payload: RegisterPayload): Promise<Session
   return session;
 }
 
-// export function logout() {
-//   useAuthStore.getState().setSession(null);
-// }
-export async function logout() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!apiUrl) {
-    console.error(
-      "[GoRide] NEXT_PUBLIC_API_URL is not set — cannot redirect to identity logout.",
-    );
-    // Still clear the local session so the user isn't stuck in a signed-in
-    // state on the client even if the server-side cookie can't be cleared.
-    useAuthStore.getState().setSession(null);
-    return;
-  }
+
+export function logout() {
   useAuthStore.getState().setSession(null);
-  const cleanApiUrl = apiUrl.replace(/\/+$/, "");
-  window.location.href = `${cleanApiUrl}/logout`;
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+  window.location.href = "/logout";
 }
+
 
 export async function refreshCurrentUser(): Promise<User | null> {
   const st = useAuthStore.getState();

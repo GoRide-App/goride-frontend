@@ -71,14 +71,14 @@ export function profileForRole(role: Role) {
       : ROUTES.rider.profile;
 }
 
-const IDENTITY_API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://localhost:7136";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
 /**
- * The backend's /login, /signup and /logout endpoints redirect back to
- * whatever `returnUrl` they're given, verbatim — it must be an absolute URL
- * or the browser ends up on the backend's own origin (e.g. https://localhost:7136/dashboard,
- * which doesn't exist there) instead of back on the frontend.
+ * /login, /signup and /logout are proxied to identity-auth via next.config.ts's
+ * rewrites() (relative paths, same-origin — no more cross-origin cookies/CORS).
+ * The backend still redirects back to whatever `returnUrl` it's given, verbatim,
+ * so that part must stay an absolute URL or the browser ends up trying to load
+ * a path off its own origin that doesn't exist there.
  */
 function absoluteReturnUrl(returnUrl?: string) {
   if (!returnUrl) return undefined;
@@ -86,21 +86,21 @@ function absoluteReturnUrl(returnUrl?: string) {
 }
 
 export function identityLoginUrl(returnUrl?: string) {
-  const base = `${IDENTITY_API_URL}/login`;
+  const base = "/login";
   const absolute = absoluteReturnUrl(returnUrl);
   if (!absolute) return base;
   return `${base}?returnUrl=${encodeURIComponent(absolute)}`;
 }
 
 export function identitySignupUrl(returnUrl?: string) {
-  const base = `${IDENTITY_API_URL}/signup`;
+  const base = "/signup";
   const absolute = absoluteReturnUrl(returnUrl);
   if (!absolute) return base;
   return `${base}?returnUrl=${encodeURIComponent(absolute)}`;
 }
 
 export function identityLogoutUrl(returnUrl?: string) {
-  const base = `${IDENTITY_API_URL}/logout`;
+  const base = "/logout";
   const absolute = absoluteReturnUrl(returnUrl);
   if (!absolute) return base;
   return `${base}?returnUrl=${encodeURIComponent(absolute)}`;
