@@ -310,3 +310,60 @@ export function TripCompletedSummarySheet({
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* 5. Payment Confirmation Alert Sheet — SCRUM-130                    */
+/* ------------------------------------------------------------------ */
+
+export function PaymentConfirmationAlertSheet({
+  trip,
+  fare,
+  channels = ["push", "email"],
+  onDismiss,
+}: {
+  trip: Trip;
+  fare?: number;
+  channels?: string[];
+  onDismiss: () => void;
+}) {
+  const finalFare = fare ?? trip.finalFare ?? trip.estimatedFare ?? 0;
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col p-4 bg-white rounded-xl shadow-lg border border-zinc-200">
+      <div className="flex items-center gap-2 border-b pb-3 mb-3">
+        <h2 className="text-lg font-bold text-zinc-900 flex-1">Payment Confirmed</h2>
+        <span className="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-800 font-semibold">Paid</span>
+      </div>
+
+      <div className="mb-4 flex items-start gap-2.5 rounded-lg bg-emerald-50 p-3.5 text-xs font-medium text-emerald-900">
+        <Info size={18} className="mt-0.5 shrink-0 text-emerald-600" />
+        <div>
+          <p className="font-semibold text-emerald-950">Payment Confirmation Sent</p>
+          <p className="mt-0.5 text-emerald-800">
+            A confirmation receipt for LKR {finalFare.toFixed(2)} was sent to your enabled channels ({channels.join(" & ")}).
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2 text-sm text-zinc-700">
+        <div className="flex justify-between py-1 border-b">
+          <span className="text-muted">Trip ID</span>
+          <span className="font-mono text-xs font-semibold text-zinc-900">{trip.id}</span>
+        </div>
+        <div className="flex justify-between py-1 border-b">
+          <span className="text-muted">Amount Paid</span>
+          <span className="font-bold text-zinc-900">LKR {finalFare.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between py-1 border-b">
+          <span className="text-muted">Dispatch Channels</span>
+          <span className="font-semibold capitalize text-brand-600">{channels.join(", ")}</span>
+        </div>
+      </div>
+
+      <Button className="mt-5 w-full" size="lg" onClick={onDismiss}>
+        Close Receipt
+      </Button>
+    </motion.div>
+  );
+}
+
+

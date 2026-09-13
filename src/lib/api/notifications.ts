@@ -1,6 +1,6 @@
 /**
  * Client helper for interacting with the goride-notification microservice.
- * Handles FCM device push token registrations and trip notification triggers.
+ * Handles FCM device push token registrations, notification preference management, and trip notification triggers.
  */
 
 const NOTIFICATION_API_URL = process.env.NEXT_PUBLIC_NOTIFICATION_API_URL ?? "http://localhost:8083";
@@ -29,12 +29,25 @@ export interface TripCompletedNotificationPayload {
   currentState: string;
 }
 
+export interface PaymentConfirmedNotificationPayload {
+  tripId: string;
+  riderId: string;
+  fare: number;
+}
+
 export interface NotificationTriggerResult {
   success: boolean;
   status: number;
   message: string;
   nextState?: string;
+  channels?: string[];
   conflict?: boolean;
+}
+
+export interface UserNotificationPreferences {
+  riderId: string;
+  pushEnabled: boolean;
+  emailEnabled: boolean;
 }
 
 /**
@@ -155,6 +168,46 @@ export async function triggerTripCompletedNotification(
       success: false,
       status: 500,
       message: "Network connection error while sending ride completion notification.",
+    };
+  }
+}
+
+/**
+ * Triggers payment confirmation notification over enabled channels (Push & Email) (SCRUM-130).
+ */
+export async function triggerPaymentConfirmationNotification(
+  payload: PaymentConfirmedNotificationPayload
+): Promise<NotificationTriggerResult> {
+  try {
+    const baseUrl = NOTIFICATION_API_URL.replace(/\/+$/, "");
+    const res = await fetch(`${baseUrl}/api/notifications/trip/payment-confirmed`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      return {
+        success: false,
+        status: res.status,
+        message: data.message ?? `Failed to trigger payment confirmation notification (${res.status})`,
+      };
+    }
+
+    return {
+      success: true,
+      status: 200,
+      message: data.message ?? "Payment confirmation notifications dispatched successfully",
+      channels: data.channels ?? ["push", "email"],
+    };
+  } catch (err) {
+    console.error("[Notification] Error triggering payment confirmation notification:", err);
+    return {
+      success: false,
+      status: 500,
+      message: "Network connection error while sending payment confirmation notification.",
     };
   }
 }
