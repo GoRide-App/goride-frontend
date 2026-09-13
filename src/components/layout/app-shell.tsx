@@ -22,7 +22,9 @@ interface NavItem {
   exact?: boolean;
 }
 
-const RIDER_NAV: NavItem[] = [{ href: ROUTES.rider.home, label: "Book a ride", icon: MapPin, exact: true }];
+const RIDER_NAV: NavItem[] = [
+  { href: ROUTES.rider.home, label: "Book a ride", icon: MapPin, exact: true },
+];
 
 export type AppShellUser = {
   name: string;
@@ -58,10 +60,11 @@ export function AppShell({
   const [confirmLogout, setConfirmLogout] = React.useState(false);
   const [loggingOut, setLoggingOut] = React.useState(false);
 
-  const items = RIDER_NAV;
+  const items = user.role === "Rider" ? RIDER_NAV : [];
   const accent = "text-brand-300";
 
-  const isActive = (item: NavItem) => (item.exact ? pathname === item.href : pathname.startsWith(item.href));
+  const isActive = (item: NavItem) =>
+    item.exact ? pathname === item.href : pathname.startsWith(item.href);
   const fallbackTitle = items.find((i) => isActive(i))?.label;
 
   const nav = (
@@ -75,25 +78,40 @@ export function AppShell({
             onClick={() => setOpen(false)}
             className={cn(
               "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-              active ? "bg-white/10 text-white" : "text-white/65 hover:bg-white/5 hover:text-white",
+              active
+                ? "bg-white/10 text-white"
+                : "text-white/65 hover:bg-white/5 hover:text-white",
             )}
           >
-            {active && <span className="absolute inset-y-2 left-0 w-1 rounded-r-full bg-brand-400" />}
-            <item.icon size={18} className={cn(active ? accent : "text-white/60 group-hover:text-white")} />
+            {active && (
+              <span className="absolute inset-y-2 left-0 w-1 rounded-r-full bg-brand-400" />
+            )}
+            <item.icon
+              size={18}
+              className={cn(
+                active ? accent : "text-white/60 group-hover:text-white",
+              )}
+            />
             <span className="flex-1">{item.label}</span>
           </Link>
         );
       })}
-
     </nav>
   );
 
   const account = (
     <div className="mt-auto px-3 pt-3">
       <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
-        <Avatar name={user.name} src={user.profilePhotoUrl} size="sm" tone="bg-brand-400 text-ink" />
+        <Avatar
+          name={user.name}
+          src={user.profilePhotoUrl}
+          size="sm"
+          tone="bg-brand-400 text-ink"
+        />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-white">{user.name}</p>
+          <p className="truncate text-sm font-semibold text-white">
+            {user.name}
+          </p>
           <p className="truncate text-[11px] text-white/60">{user.email}</p>
         </div>
         <button
@@ -111,7 +129,9 @@ export function AppShell({
   const brand = (
     <div className="mb-6 flex items-center justify-between px-6">
       <Logo variant="white" height={24} />
-      <span className="rounded-md bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/70">{user.role ?? "rider"}</span>
+      <span className="rounded-md bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/70">
+        {user.role ?? "rider"}
+      </span>
     </div>
   );
 
@@ -148,15 +168,31 @@ export function AppShell({
             >
               <div className="mb-6 flex items-center justify-between px-5">
                 <Logo variant="white" height={22} />
-                <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="rounded-lg p-1.5 text-white/70 hover:bg-white/10">
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="Close"
+                  className="rounded-lg p-1.5 text-white/70 hover:bg-white/10"
+                >
                   <X size={18} />
                 </button>
               </div>
               <div className="flex items-center gap-3 px-5 pb-4">
-                <Avatar name={user.name} src={user.profilePhotoUrl} size="md" tone="bg-brand-400 text-ink" />
+                <Avatar
+                  name={user.name}
+                  src={user.profilePhotoUrl}
+                  size="md"
+                  tone="bg-brand-400 text-ink"
+                />
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-white">{user.name}</p>
-                  <RatingInline value={user.rating ?? 5} count={user.ratingCount ?? 0} className="text-white/70" />
+                  <p className="truncate text-sm font-semibold text-white">
+                    {user.name}
+                  </p>
+                  <RatingInline
+                    value={user.rating ?? 5}
+                    count={user.ratingCount ?? 0}
+                    className="text-white/70"
+                  />
                 </div>
               </div>
               {nav}
@@ -169,32 +205,61 @@ export function AppShell({
       {/* main column */}
       <div className="relative flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center gap-2 border-b border-zinc-200 bg-white px-3 lg:px-6">
-          <button type="button" aria-label="Open menu" onClick={() => setOpen(true)} className="rounded-lg p-2 hover:bg-surface-2 lg:hidden">
+          <button
+            type="button"
+            aria-label="Open menu"
+            onClick={() => setOpen(true)}
+            className="rounded-lg p-2 hover:bg-surface-2 lg:hidden"
+          >
             <Menu size={20} />
           </button>
           {backHref && (
-            <Link href={backHref} aria-label="Go back" className="rounded-lg p-2 hover:bg-surface-2">
+            <Link
+              href={backHref}
+              aria-label="Go back"
+              className="rounded-lg p-2 hover:bg-surface-2"
+            >
               <ArrowLeft size={18} strokeWidth={2.5} />
             </Link>
           )}
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-[15px] font-semibold leading-tight">{title ?? fallbackTitle ?? "GoRide"}</h1>
-            {description && <p className="truncate text-xs text-muted">{description}</p>}
+            <h1 className="truncate text-[15px] font-semibold leading-tight">
+              {title ?? fallbackTitle ?? "GoRide"}
+            </h1>
+            {description && (
+              <p className="truncate text-xs text-muted">{description}</p>
+            )}
           </div>
           {actions}
           <span className="hidden h-6 w-px bg-zinc-200 sm:block" />
           <span className="hidden items-center gap-2 rounded-lg px-1.5 py-1 sm:flex">
-            <Avatar name={user.name} src={user.profilePhotoUrl} size="xs" tone="bg-navy-900 text-white" />
-            <span className="text-xs font-semibold">{user.name.split(" ")[0]}</span>
+            <Avatar
+              name={user.name}
+              src={user.profilePhotoUrl}
+              size="xs"
+              tone="bg-navy-900 text-white"
+            />
+            <span className="text-xs font-semibold">
+              {user.name.split(" ")[0]}
+            </span>
           </span>
         </header>
 
         <InShellProvider value>
           {variant === "split" ? (
-            <div className="relative min-h-0 flex-1 overflow-hidden">{children}</div>
+            <div className="relative min-h-0 flex-1 overflow-hidden">
+              {children}
+            </div>
           ) : (
             <main className="min-h-0 flex-1 overflow-y-auto scrollbar-visible">
-              <div className={cn("mx-auto w-full max-w-[1100px] p-4 lg:p-6", className)}>{children}</div>
+              <div
+                className={cn(
+                  "mx-auto w-full max-w-[1100px] p-4 lg:p-6",
+                  className,
+                )}
+              >
+                {children}
+              </div>
             </main>
           )}
         </InShellProvider>
