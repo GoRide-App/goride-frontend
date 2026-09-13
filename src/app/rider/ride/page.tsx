@@ -53,6 +53,7 @@ export default function RiderRidePage() {
     }, []);
 
     React.useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (!s.pickup || s.pickup.address === "Locating…") locate();
         else getCurrentPosition().then(({ pos }) => setUserPos(pos));
         // eslint-disable-next-line react-hooks/exhaustive-deps

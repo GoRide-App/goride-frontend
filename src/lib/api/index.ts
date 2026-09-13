@@ -16,6 +16,28 @@ export const IS_MOCK = API_MODE === "mock";
 
 export type { GoRideApi, TripEvent, RegisterPayload, CreateTripPayload, DriverTripAction } from "./contract";
 
+export interface AdminDriverActivity {
+  driverId: string;
+  vehicleMake: string;
+  vehicleModel: string;
+  vehiclePlate: string;
+  vehicleTypeCode: string;
+  licenseNumber: string;
+  licenseExpiry: string;
+  status: number;
+  verifiedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InternalUser {
+  id: string;
+  username: string;
+  email: string | null;
+  phone: string | null;
+  roles: string[];
+}
+
 export function errorMessage(e: unknown, fallback = "Something went wrong. Please try again.") {
   if (e && typeof e === "object" && "message" in e && typeof (e as Error).message === "string") return (e as Error).message;
   return fallback;
@@ -279,9 +301,9 @@ function buildSessionFromMe(me: MeResponse): Session {
   };
 }
 
-export async function getMe(): Promise<MeResponse | null> {
+async function fetchMe(sub?: string): Promise<MeResponse | null> {
   const session = useAuthStore.getState().session;
-  if (session?.provider === "local") {
+  if (!sub && session?.provider === "local") {
     return {
       userId: session.user.id,
       name: session.user.name,
@@ -291,7 +313,8 @@ export async function getMe(): Promise<MeResponse | null> {
     };
   }
 
-  const res = await fetch(`/api/me`, {
+  const query = sub ? `?sub=${encodeURIComponent(sub)}` : "";
+  const res = await fetch(`/api/me${query}`, {
     cache: "no-store",
   });
 
@@ -306,8 +329,41 @@ export async function getMe(): Promise<MeResponse | null> {
     ...raw,
     phone: raw.phone ?? raw.phoneNumber ?? raw.phone_number ?? null,
   };
-  useAuthStore.getState().setSession(buildSessionFromMe(me));
+  if (!sub) useAuthStore.getState().setSession(buildSessionFromMe(me));
   return me;
+}
+
+export function getMe(): Promise<MeResponse | null> {
+  return fetchMe();
+}
+
+export async function getInternalUser(sub: string): Promise<InternalUser | null> {
+  const res = await fetch(`/api/internal-users/${encodeURIComponent(sub)}`, { cache: "no-store" });
+  if (res.status === 401 || res.status === 404) return null;
+  if (!res.ok) throw new Error("Failed to fetch internal user");
+
+  const raw = (await res.json()) as {
+    id: string;
+    userName?: string;
+    emails?: { value?: string }[] | string[];
+    phoneNumbers?: { value?: string }[];
+    roles?: { display?: string }[];
+  };
+
+  return {
+    id: raw.id,
+    username: (raw.userName ?? "").replace(/^DEFAULT\//, ""),
+    email: raw.emails?.[0] ? typeof raw.emails[0] === "string" ? raw.emails[0] : raw.emails[0].value ?? null : null,
+    phone: raw.phoneNumbers?.[0]?.value ?? null,
+    roles: raw.roles?.map((role) => role.display).filter((role): role is string => Boolean(role)) ?? [],
+  };
+}
+
+export async function getAdminActivity(): Promise<AdminDriverActivity[]> {
+  const res = await fetch("/api/adminActivity", { cache: "no-store" });
+  if (res.status === 401 || res.status === 403) return [];
+  if (!res.ok) throw new Error("Failed to fetch driver activity");
+  return (await res.json()) as AdminDriverActivity[];
 }
 
 export async function getDriverProfile(sub: string): Promise<DriverProfile | null> {
