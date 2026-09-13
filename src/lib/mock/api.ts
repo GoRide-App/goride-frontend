@@ -5,6 +5,7 @@ import { generatePin, haversineKm, sleep, uid } from "@/lib/utils";
 import { getRoute, isInsideServiceArea } from "@/lib/geo/providers";
 import { estimateFor } from "./seed";
 import { world } from "./world";
+import { useAuthStore } from "@/lib/auth/session";
 
 const LATENCY = Number(process.env.NEXT_PUBLIC_MOCK_LATENCY_MS ?? 350);
 
@@ -131,7 +132,11 @@ export const mockApi: GoRideApi = {
       await delay(150);
       const s = world().get();
       const u = s.users.find((x) => x.id === id) ?? s.drivers.find((x) => x.id === id);
-      if (!u) throw err(404, "User not found.");
+      if (!u) {
+        const sessionUser = useAuthStore.getState().session?.user;
+        if (sessionUser && sessionUser.id === id) return sessionUser;
+        throw err(404, "User not found.");
+      }
       return u;
     },
     async update(id, patch) {
@@ -145,7 +150,32 @@ export const mockApi: GoRideApi = {
             out = u;
           }
         }
+        if (!out) {
+          const sessionUser = useAuthStore.getState().session?.user;
+          const newUser: User = {
+            id,
+            name: patch.name ?? sessionUser?.name ?? "User",
+            email: sessionUser?.email ?? "user@example.com",
+            phone: patch.phone ?? sessionUser?.phone ?? undefined,
+            role: sessionUser?.role ?? "Rider",
+            emailVerified: sessionUser?.emailVerified ?? true,
+            phoneVerified: sessionUser?.phoneVerified ?? false,
+            rating: sessionUser?.rating ?? 5,
+            ratingCount: sessionUser?.ratingCount ?? 0,
+            createdAt: sessionUser?.createdAt ?? new Date().toISOString(),
+            ...patch,
+          };
+          st.users.push(newUser);
+          out = newUser;
+        }
       });
+      if (patch.phone) {
+        fetch("/api/profile", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phoneNumber: patch.phone }),
+        }).catch(() => {});
+      }
       if (!out) throw err(404, "User not found.");
       return out;
     },
