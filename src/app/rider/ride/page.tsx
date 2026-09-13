@@ -11,7 +11,7 @@ import { MapSplit, PanelBody } from "@/components/layout/map-split";
 import { useSetShellHeader } from "@/components/layout/shell-header";
 import { MapView } from "@/components/map";
 import { toast } from "@/components/ui/toast";
-import { type ActiveField, PinDropChrome, PlanPanel, SelectVehicleSheet } from "@/components/rider/ride-phases";
+import { type ActiveField, DriverArrivalAlertSheet, PinDropChrome, PlanPanel, SelectVehicleSheet, TripCompletedSummarySheet } from "@/components/rider/ride-phases";
 import { useRideStore } from "@/store/ride-store";
 
 /** Map padding (px) so fitted routes never hide behind the map's own chrome. */

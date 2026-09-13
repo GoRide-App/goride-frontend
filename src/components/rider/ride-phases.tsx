@@ -195,3 +195,118 @@ export function SelectVehicleSheet({
     </div>
   );
 }
+
+/* ------------------------------------------------------------------ */
+/* 3. Driver Arrival Alert Sheet — SCRUM-128                          */
+/* ------------------------------------------------------------------ */
+
+export function DriverArrivalAlertSheet({
+  trip,
+  driverName,
+  error,
+  onDismiss,
+}: {
+  trip: Trip;
+  driverName?: string;
+  error?: string | null;
+  onDismiss: () => void;
+}) {
+  const driver = driverName ?? trip.driver?.name ?? "Your driver";
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col p-4 bg-white rounded-xl shadow-lg border border-zinc-200">
+      <div className="flex items-center gap-2 border-b pb-3 mb-3">
+        <h2 className="text-lg font-bold text-zinc-900 flex-1">Driver Has Arrived</h2>
+        <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-800 font-semibold">Arrived</span>
+      </div>
+
+      {error ? (
+        <div className="mb-3 flex items-start gap-2 rounded-lg bg-red-50 p-3 text-xs font-medium text-danger">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-red-600" />
+          <div>
+            <p className="font-semibold">Transition Rejected (HTTP 409)</p>
+            <p className="mt-0.5">{error}</p>
+          </div>
+        </div>
+      ) : (
+        <div className="mb-3 flex items-start gap-2 rounded-lg bg-blue-50 p-3 text-xs font-medium text-blue-900">
+          <Info size={16} className="mt-0.5 shrink-0" />
+          <p>{driver} is waiting at your pickup location ({trip.pickup.name}).</p>
+        </div>
+      )}
+
+      <Button className="mt-4 w-full" size="lg" onClick={onDismiss}>
+        Got It
+      </Button>
+    </motion.div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* 4. Trip Completed Summary Sheet — SCRUM-129                         */
+/* ------------------------------------------------------------------ */
+
+export function TripCompletedSummarySheet({
+  trip,
+  fare,
+  driverName,
+  error,
+  onClose,
+}: {
+  trip: Trip;
+  fare?: number;
+  driverName?: string;
+  error?: string | null;
+  onClose: () => void;
+}) {
+  const finalFare = fare ?? trip.finalFare ?? trip.estimatedFare ?? 0;
+  const driver = driverName ?? trip.driver?.name ?? "Your driver";
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col p-4 bg-white rounded-xl shadow-lg border border-zinc-200">
+      <div className="flex items-center gap-2 border-b pb-3 mb-3">
+        <h2 className="text-lg font-bold text-zinc-900 flex-1">Ride Completed</h2>
+        <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-800 font-semibold">Completed</span>
+      </div>
+
+      {error ? (
+        <div className="mb-3 flex items-start gap-2 rounded-lg bg-red-50 p-3 text-xs font-medium text-danger">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-red-600" />
+          <div>
+            <p className="font-semibold">State Transition Error (HTTP 409)</p>
+            <p className="mt-0.5">{error}</p>
+          </div>
+        </div>
+      ) : (
+        <div className="mb-3 flex items-start gap-2 rounded-lg bg-emerald-50 p-3 text-xs font-medium text-emerald-800">
+          <Info size={16} className="mt-0.5 shrink-0" />
+          <p>You have arrived at your destination. A completion notification has been sent.</p>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2 text-sm text-zinc-700">
+        <div className="flex justify-between py-1 border-b">
+          <span className="text-muted">Driver</span>
+          <span className="font-semibold text-zinc-900">{driver}</span>
+        </div>
+        <div className="flex justify-between py-1 border-b">
+          <span className="text-muted">Pickup</span>
+          <span className="font-medium text-zinc-900 truncate max-w-[200px]">{trip.pickup.name}</span>
+        </div>
+        <div className="flex justify-between py-1 border-b">
+          <span className="text-muted">Destination</span>
+          <span className="font-medium text-zinc-900 truncate max-w-[200px]">{trip.destination.name}</span>
+        </div>
+        <div className="flex justify-between py-1 pt-2 text-base font-bold text-zinc-900">
+          <span>Total Fare</span>
+          <span className="text-brand-600">LKR {finalFare.toFixed(2)}</span>
+        </div>
+      </div>
+
+      <Button className="mt-5 w-full" size="lg" onClick={onClose}>
+        Done
+      </Button>
+    </motion.div>
+  );
+}
+
