@@ -506,15 +506,7 @@ export function NotificationPrefsSection({ user }: { user: User }) {
               checked={prefs.emailEnabled}
               onChange={(v) => update({ emailEnabled: v })}
               label="Email"
-              description="Receipts and account security messages"
-            />
-          </div>
-          <div className="p-4">
-            <Toggle
-              checked={prefs.smsEnabled}
-              onChange={(v) => update({ smsEnabled: v })}
-              label="SMS"
-              description="Critical alerts only (carrier charges may apply)"
+              description="Receipts, booking changes and account notifications"
             />
           </div>
         </Card>

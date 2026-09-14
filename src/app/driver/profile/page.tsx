@@ -9,6 +9,7 @@ import type { DriverProfile, User } from "@/types";
 import { AppShell } from "@/components/layout/app-shell";
 import {
   EmergencyContactsSection,
+  NotificationPrefsSection,
   ProfileScreen,
 } from "@/components/profile/profile-screen";
 import { errorMessage, identity } from "@/lib/auth/identity-store";
@@ -133,6 +134,7 @@ function DriverProfilePageInner({
           phoneOnly
         >
           <VehicleSection driverId={driverId} />
+          <NotificationPrefsSection user={user} />
           <EmergencyContactsSection user={user} />
         </ProfileScreen>
       </div>
