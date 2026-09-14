@@ -189,9 +189,6 @@ export function SelectVehicleSheet({
           <VehicleOption key={vt.id} vt={vt} estimate={estimates.find((e) => e.vehicleTypeId === vt.id)} selected={vt.id === selectedId} onSelect={() => onSelect(vt.id)} index={i} />
         ))}
       </div>
-      <p className="mt-3 flex items-center gap-1.5 text-[11px] font-normal text-muted">
-        <Info size={12} /> Fares are estimates, calculated from route distance and vehicle type (SCRUM-53/54). Trip booking is not implemented yet.
-      </p>
     </div>
   );
 }
