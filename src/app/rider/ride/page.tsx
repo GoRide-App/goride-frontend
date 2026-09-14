@@ -59,6 +59,20 @@ export default function RiderRidePage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Recover trip draft or fallback to planning if in select phase without a trip object
+    React.useEffect(() => {
+        if (s.uiPhase === "select" && !s.trip && !s.busy) {
+            if (s.pickup && s.destination && user?.id) {
+                s.createDraft(user.id).then((ok) => {
+                    if (!ok) s.resetPlanning();
+                });
+            } else {
+                s.resetPlanning();
+            }
+        }
+    }, [s.uiPhase, s.trip, s.pickup, s.destination, s.busy, user?.id, s.createDraft, s.resetPlanning]);
+
+
     const fitTo = React.useMemo<LatLng[] | undefined>(() => {
         if (pinDrop) return undefined;
         return s.pickup && s.destination ? [s.pickup, s.destination] : undefined;

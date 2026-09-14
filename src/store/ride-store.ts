@@ -73,7 +73,14 @@ export const useRideStore = create<RideState>()(
     {
       name: "goride.ride",
       storage: createJSONStorage(() => sessionStorage),
-      partialize: (s) => ({ pickup: s.pickup, destination: s.destination, selectedVehicleTypeId: s.selectedVehicleTypeId, uiPhase: s.uiPhase }),
+      partialize: (s) => ({
+        pickup: s.pickup,
+        destination: s.destination,
+        selectedVehicleTypeId: s.selectedVehicleTypeId,
+        uiPhase: s.uiPhase,
+        trip: s.trip,
+        estimates: s.estimates,
+      }),
     },
   ),
 );
