@@ -17,6 +17,15 @@ API = os.environ.get("GORIDE_API", "https://localhost:7136")
 
 EVIDENCE = Path(os.environ.get("GORIDE_EVIDENCE", Path(__file__).resolve().parent / "evidence"))
 
+# width, height, label - the three viewports every responsive check runs at.
+# Shared between test_ui_smoke.py and test_ride_planning.py so both suites
+# test the same sizes rather than drifting apart.
+VIEWPORTS = [
+    (390, 844, "phone"),
+    (768, 1024, "tablet"),
+    (1440, 900, "desktop"),
+]
+
 
 def _listening(url: str) -> bool:
     parsed = urlparse(url)
@@ -147,3 +156,16 @@ def has_horizontal_overflow(drv) -> bool:
         "const e = document.documentElement;"
         "return e.scrollWidth > e.clientWidth + 1;"
     )
+
+
+def overflow_detail(drv) -> str:
+    """' - widest offender: <div class="..."> reaches 512px', or '' if nothing overflows.
+
+    A ready-to-append suffix for an overflow assertion message, factored out
+    so every responsive test reports the same way instead of re-deriving it.
+    """
+    culprit = widest_offender(drv)
+    if not culprit:
+        return ""
+    return (f" - widest offender: <{culprit['tag']} class=\"{culprit['cls']}\"> "
+            f"reaches {culprit['right']}px")

@@ -2,3 +2,4 @@
 *.jtl
 jmeter.log
 report/
+report-trip/
