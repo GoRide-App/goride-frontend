@@ -11,19 +11,12 @@ account. Run them with:
 from __future__ import annotations
 
 import pytest
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 
-from conftest import (APP, has_horizontal_overflow, set_viewport, wait_settled,
-                      widest_offender)
-
-# width, height, label - the three viewports worth screenshotting for a report
-VIEWPORTS = [
-    (390, 844, "phone"),
-    (768, 1024, "tablet"),
-    (1440, 900, "desktop"),
-]
+from conftest import (VIEWPORTS, APP, has_horizontal_overflow, overflow_detail,
+                      set_viewport, wait_settled)
 
 
 def test_landing_page_loads(driver, shot):
@@ -68,19 +61,40 @@ def test_sign_in_reaches_asgardeo(driver, shot):
     shot(driver, "asgardeo-login")
 
 
+def _body_text_lower(driver) -> str:
+    """driver.find_element(body).text, tolerant of the element going stale
+    mid-read.
+
+    /dashboard with no session gets redirected by proxy.ts's own server-side
+    check (no app_session cookie -> a real 302 to Asgardeo) before any
+    client JS runs - so the redirect is often a genuine browser navigation,
+    not a client-side route change. If that navigation lands between
+    find_element locating <body> and .text being read off it, the original
+    <body> node is already gone and Selenium raises
+    StaleElementReferenceException. That is not a real failure - it means
+    the very redirect this test is checking for is in flight - so treat it
+    as "not settled yet" and let the caller retry rather than erroring out.
+    """
+    try:
+        return driver.find_element(By.TAG_NAME, "body").text.lower()
+    except StaleElementReferenceException:
+        return ""
+
+
 def test_dashboard_is_not_readable_without_a_session(driver, shot):
     """A protected route must not render its contents to an anonymous visitor."""
     driver.get(f"{APP}/dashboard")
-    # The guard redirects client-side, so give it a moment before judging.
+    # The guard may redirect server-side (a real navigation) or client-side,
+    # so give it a moment before judging either way.
     try:
         WebDriverWait(driver, 15).until(
             lambda d: "asgardeo.io" in d.current_url
             or "/login" in d.current_url
-            or "sign in" in d.find_element(By.TAG_NAME, "body").text.lower()
+            or "sign in" in _body_text_lower(d)
         )
     except TimeoutException:
         pass  # the assertion below reports it properly
-    body = driver.find_element(By.TAG_NAME, "body").text.lower()
+    body = _body_text_lower(driver)
 
     left_the_app = "asgardeo.io" in driver.current_url or "/login" in driver.current_url
     shows_sign_in = "sign in" in body
@@ -101,13 +115,9 @@ def test_landing_page_does_not_scroll_sideways(driver, shot, width, height, labe
     wait_settled(driver)
     shot(driver, f"landing-{label}-{width}x{height}")
 
-    culprit = widest_offender(driver)
-    detail = ""
-    if culprit:
-        detail = (f" - widest offender: <{culprit['tag']} class=\"{culprit['cls']}\"> "
-                  f"reaches {culprit['right']}px")
     assert not has_horizontal_overflow(driver), (
-        f"the landing page scrolls horizontally at {width}x{height} ({label}){detail}"
+        f"the landing page scrolls horizontally at {width}x{height} ({label})"
+        f"{overflow_detail(driver)}"
     )
 
 
