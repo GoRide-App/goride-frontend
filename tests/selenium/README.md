@@ -17,8 +17,8 @@ real Rider first (see "Signed-in tests" below) — allow it more time to run.
 | `test_no_password_field_on_the_landing_page` | SCRUM-30 | The app never collects a password itself |
 | `test_sign_in_reaches_asgardeo` | SCRUM-30 | Clicking Sign in lands on the Asgardeo hosted login |
 | `test_dashboard_is_not_readable_without_a_session` | SCRUM-36 | An anonymous visit to `/dashboard` is sent to sign in |
-| `test_landing_page_does_not_scroll_sideways` | UI | No horizontal overflow at phone, tablet and desktop widths |
-| `test_sign_in_stays_reachable_at_every_size` | UI | The Sign in control stays visible at every width |
+| `test_landing_page_does_not_scroll_sideways` | UI | No horizontal overflow at all eight widths |
+| `test_sign_in_stays_reachable_at_every_size` | UI | Sign in stays visible and fully inside the viewport at every width |
 | `test_page_has_no_console_errors` | UI | No uncaught JavaScript on the landing page |
 
 The overflow test was written when the landing page scrolled sideways at every
@@ -35,9 +35,9 @@ message names the element that sticks out and how far it reaches.
 | `test_use_current_location_as_pickup` | SCRUM-47 | Pickup auto-locates on arrival, and "Use current location" re-locates it on demand |
 | `test_search_pickup_location_by_address` | SCRUM-48 | Typing an address surfaces it as a pickable suggestion |
 | `test_fare_and_vehicle_selection` | SCRUM-53/54/56 | Every vehicle type shows a real calculated fare; only Tuk Tuk is genuinely enabled (real `disabled` attribute, not just styling) and selecting it does not navigate anywhere, since trip booking isn't implemented yet |
-| `test_rider_home_does_not_scroll_sideways` | UI | No horizontal overflow on the signed-in rider home page at phone, tablet and desktop widths |
-| `test_ride_planning_page_does_not_scroll_sideways` | UI | Same, for the pickup/destination planning screen (map + panel side by side on desktop, stacked on phone) |
-| `test_choose_a_ride_does_not_scroll_sideways` | UI | Same, for the vehicle-selection cards after Search - the densest layout in the flow, and the one most likely to overflow on a phone |
+| `test_rider_home_layout_holds_at_every_size` | UI | Rider home: no horizontal overflow, and every recent destination fully on screen and tappable, at all eight sizes |
+| `test_ride_planning_layout_holds_at_every_size` | UI | Pickup/destination screen (map and panel competing for width): no overflow, and both address fields reachable and tappable, at all eight sizes |
+| `test_choose_a_ride_layout_holds_at_every_size` | UI | Vehicle cards after Search: Search itself usable, no overflow, and every card on screen and tappable. Phone/tablet/desktop only — see "Window sizes" below |
 
 The remaining implemented Sprint 2 stories (SCRUM-127/128/129/130/132) are
 notification-service triggers with no UI to click through — they stay covered
@@ -77,11 +77,63 @@ stuck to `evidence/sign-in-stuck.png` / `.html` before failing, so a report
 of a new failure can include those two files.
 
 The three responsive tests reuse `VIEWPORTS` from `conftest.py` (the same
-phone/tablet/desktop sizes `test_ui_smoke.py` checks) via an `any_size`
+sizes `test_ui_smoke.py` checks) via an `any_size`
 fixture, not `fresh_ride` directly - `rider_driver` is one Chrome session
 shared by every test in this file, so a viewport test that left it resized
 would corrupt every test that runs after it; `any_size` restores the
 desktop 1440x900 size once each parametrized test finishes.
+
+## Window sizes
+
+`conftest.py` owns the size list so both files test the same thing. The sizes
+sit either side of the Tailwind breakpoints the app uses (sm 640, md 768,
+lg 1024, xl 1280), because a layout that breaks does it just above or below a
+breakpoint rather than in the middle of one:
+
+| Size | Label | Why it is in the list |
+| --- | --- | --- |
+| 320x568 | `small-phone` | The narrowest phone still in real use - worst case for a fixed width or a long unbroken string |
+| 390x844 | `phone` | The phone size most people carry |
+| 414x896 | `large-phone` | A large phone, still under the `sm` breakpoint |
+| 844x390 | `phone-landscape` | The same phone turned sideways: wide enough for the desktop layout but only 390px tall, where stacked panels run out of room |
+| 768x1024 | `tablet` | Exactly on `md` - the tablet layout's first pixel |
+| 1024x768 | `small-laptop` | Exactly on `lg` |
+| 1440x900 | `desktop` | The size the design was drawn at |
+| 1920x1080 | `wide-desktop` | A full HD monitor - catches layouts that stop growing or centre badly |
+
+Each responsive test asks two questions at every size, because passing the
+first does not imply the second:
+
+1. **Does the page hold together?** `has_horizontal_overflow()` - no sideways
+   scroll. On failure the message names the element sticking out furthest and
+   how far it reaches.
+2. **Are the controls usable?** `control_problems()` - each control is
+   rendered, has not collapsed to nothing, is fully inside the viewport
+   horizontally, and on a touch-sized screen is at least 44px (Apple's HIG
+   minimum; WCAG 2.2's own floor is a more forgiving 24px). The overflow check
+   only asks whether the *document* is wider than the screen, so a control
+   clipped by a container that hides its own overflow, squashed to a sliver, or
+   shrunk below a fingertip sails straight past it - that is the gap this
+   closes. Vertical overflow is deliberately not a failure; pages scroll down.
+
+Touch sizing is decided by the **shorter** side, not the width, so a rotated
+phone (844x390) is still treated as a phone. `set_viewport()` uses the same
+rule for Chrome's mobile emulation flag.
+
+The two cheap page-load tests run at all eight sizes. `test_choose_a_ride_...`
+has to drive the whole flow (open a destination, wait for the pickup to
+locate, Search, wait for live fares from trip-matching) before it can measure
+anything, so it runs at `CORE_VIEWPORTS` - phone, tablet and desktop, the
+three that represent genuinely different layouts - rather than paying for that
+flow eight times over. Widen it by swapping `CORE_VIEWPORTS` for `VIEWPORTS`
+in its `parametrize` decorator if you want the full sweep before a release.
+
+The 44px tap-target rule is applied to the primary controls of each screen
+(recent destinations, the two address fields, Search, the vehicle cards), not
+to every button on the page. Icon-only chrome such as the 40px back button in
+`ride-phases.tsx` is under Apple's 44px but comfortably over WCAG's 24px, so
+it is out of scope here rather than a standing red test - worth raising as its
+own small accessibility ticket if the team wants it changed.
 
 ## Prerequisites
 
@@ -106,6 +158,10 @@ Watch the browser drive itself:
 
 ```bash
 set HEADLESS=0 && python -m pytest -v
+
+
+$env:HEADLESS = "0"                 
+>> python -m pytest -v
 ```
 
 Run the suite and open a self contained HTML report with the screenshots embedded:

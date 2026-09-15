@@ -1,5 +1,6 @@
 """
-Rider ride-planning flow: SCRUM-46, SCRUM-47, SCRUM-48, SCRUM-53, SCRUM-54, SCRUM-56.
+Rider ride-planning flow: SCRUM-46, SCRUM-47, SCRUM-48, SCRUM-53, SCRUM-54, SCRUM-56,
+SCRUM-68, SCRUM-69, SCRUM-84, SCRUM-85.
 
 These are the mid-Sprint-2 stories that are actually reachable through the
 frontend right now (SCRUM-127/128/129/130/132 are notification-service
@@ -78,8 +79,9 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-from conftest import (VIEWPORTS, APP, EVIDENCE, has_horizontal_overflow,
-                      overflow_detail, set_viewport, wait_settled)
+from conftest import (CORE_VIEWPORTS, VIEWPORTS, APP, EVIDENCE, control_problems,
+                      has_horizontal_overflow, is_touch_size, overflow_detail,
+                      set_viewport, wait_settled)
 
 RIDER_EMAIL = os.environ.get("GORIDE_USER", "rider@goride.lk")
 RIDER_PASSWORD = os.environ.get("GORIDE_PASS", "goride123")
@@ -92,6 +94,13 @@ RECENT_DESTINATION = "SLIIT Malabe Campus"
 SEARCH_LANDMARK = "One Galle Face Mall"
 
 PICKUP_SELECTOR = "input[placeholder='Add a pick-up location'], input[placeholder='Locating you…']"
+DESTINATION_SELECTOR = "input[placeholder='Add a drop-off location']"
+
+# The recent destinations RECENT_PLACES seeds the rider home page with. Used by
+# the responsive checks to confirm each row is fully on screen and tappable,
+# not just that the page as a whole doesn't scroll sideways.
+RECENT_PLACES = ["SLIIT Malabe Campus", "One Galle Face Mall", "Colombo Fort Railway Station"]
+RECENT_BUTTONS_XPATH = " | ".join(f"//button[.//span[text()='{p}']]" for p in RECENT_PLACES)
 
 
 def _react_clear(field) -> None:
@@ -397,24 +406,198 @@ def test_fare_and_vehicle_selection(fresh_ride, shot):
     )
 
 
+@pytest.fixture
+def tracking_driver():
+    """
+    A dedicated, freshly-signed-in browser for the driver-tracking tests below.
+
+    Unlike rider_driver (module-scoped, shared by every quick UI check in this
+    file - see its docstring), these tests drive a real trip all the way
+    through matching and simulated movement: they run much longer and leave
+    real MockWorld state behind (an active trip). Sharing rider_driver would
+    risk a later test resuming this leftover trip instead of starting from a
+    clean slate, so this gets its own session and its own sign-in instead.
+    """
+    opts = Options()
+    opts.add_argument("--ignore-certificate-errors")
+    opts.add_argument("--allow-insecure-localhost")
+    opts.add_argument("--window-size=1440,900")
+    if os.environ.get("HEADLESS", "1") == "1":
+        opts.add_argument("--headless=new")
+    opts.set_capability("goog:loggingPrefs", {"browser": "ALL"})
+
+    drv = webdriver.Chrome(options=opts)
+    drv.implicitly_wait(5)
+    _sign_in(drv)
+    yield drv
+    drv.quit()
+
+
+def _book_a_tuk_tuk_ride(driver) -> None:
+    """
+    Drives the whole planning flow through to a confirmed request: pick a
+    destination, let pickup auto-locate, search, pick Tuk Tuk, review, confirm.
+
+    Shared setup for the driver-tracking tests below, which need an actual
+    trip request in flight before there is anything to track.
+    """
+    driver.get(f"{APP}/rider")
+    wait_settled(driver)
+    driver.find_element(By.XPATH, f"//button[.//span[text()='{RECENT_DESTINATION}']]").click()
+    WebDriverWait(driver, 10).until(lambda d: "/rider/ride" in d.current_url)
+
+    pickup_input = WebDriverWait(driver, 15).until(lambda d: d.find_element(By.CSS_SELECTOR, PICKUP_SELECTOR))
+    WebDriverWait(driver, 15).until(lambda d: pickup_input.get_attribute("value").strip() != "")
+
+    WebDriverWait(driver, 5).until(
+        lambda d: d.find_element(By.XPATH, "//button[normalize-space()='Search']")
+    ).click()
+
+    WebDriverWait(driver, 20).until(lambda d: d.find_elements(By.XPATH, "//h2[text()='Choose a ride']"))
+    driver.find_element(By.XPATH, "//button[.//span[text()='Tuk Tuk']]").click()
+
+    continue_btn = WebDriverWait(driver, 5).until(
+        lambda d: d.find_element(By.XPATH, "//button[starts-with(normalize-space(),'Continue')]")
+    )
+    WebDriverWait(driver, 5).until(lambda d: continue_btn.is_enabled())
+    continue_btn.click()
+
+    confirm_btn = WebDriverWait(driver, 10).until(
+        lambda d: d.find_element(By.XPATH, "//button[starts-with(normalize-space(),'Confirm ride')]")
+    )
+    WebDriverWait(driver, 5).until(lambda d: confirm_btn.is_enabled())
+    confirm_btn.click()
+
+
+def _active_driver_location(driver):
+    """
+    Reads the live simulated driver location straight out of MockWorld's own
+    persisted state (see world.ts's WORLD_KEY / commit()), rather than parsing
+    rounded on-screen minute counts - a much more precise signal of whether
+    the position broadcast (SCRUM-68/84) is actually moving, not just present.
+    """
+    return driver.execute_script(
+        "const w = JSON.parse(localStorage.getItem('goride.mock.world.v3') || '{}');"
+        "const entries = Object.values(w.locations || {}).filter(l => l && l.status === 'OnTrip');"
+        "return entries[0] || null;"
+    )
+
+
+def test_driver_tracking_to_pickup_and_destination(tracking_driver, shot):
+    """
+    SCRUM-68: the assigned driver's simulated position is broadcast live while
+    en route to the pickup point (MockWorld.moveAlong, driven by a 1s tick and
+    pushed to every tab/listener via commit() -> BroadcastChannel).
+    SCRUM-69: the route and ETA for that driver-to-pickup leg are genuinely
+    calculated (ensureRoute() -> getRoute(), real OSRM routing with a geodesic
+    fallback) rather than a placeholder, and shown to the rider.
+    SCRUM-84: the same simulated-position broadcast continues for the
+    pickup-to-destination leg once the trip starts.
+    SCRUM-85: the route and ETA are recalculated for that second leg too.
+
+    Drives a real request through matching to get an actual driver to track.
+    MockWorld always resolves one eventually - it falls back to generating a
+    driver after 3 search rounds (see generateRandomDriver in world.ts)
+    instead of ever leaving a trip stuck at NO_DRIVER_FOUND - so this should
+    only flake on timing, not on driver availability. Uses its own
+    tracking_driver session rather than the shared rider_driver, since it
+    leaves real trip state behind that would otherwise bleed into whichever
+    test runs next (see that fixture's docstring).
+
+    No JMeter coverage for these four stories: the route/ETA calculation here
+    runs entirely client-side (lib/geo/providers.ts's getRoute() calls the
+    public OSRM API directly from the browser) - there is no GoRide-owned
+    backend behind this feature to load-test, and load-testing someone else's
+    free public API would be inappropriate. See tests/jmeter/README.md.
+    """
+    driver = tracking_driver
+    _book_a_tuk_tuk_ride(driver)
+
+    # ---- Leg 1: driver -> pickup (SCRUM-68/69) ---------------------------
+    # Matching can take up to 3 rounds * 7s before MockWorld generates a
+    # fallback driver (see generateRandomDriver) - give it real headroom.
+    WebDriverWait(driver, 45).until(
+        lambda d: d.find_elements(By.XPATH, "//h2[contains(text(),'driver is on the way')]")
+    )
+    shot(driver, "driver-en-route-to-pickup")
+
+    eta_p = "//h2[contains(text(),'driver is on the way')]/following-sibling::p"
+    WebDriverWait(driver, 20).until(lambda d: "Calculating" not in d.find_element(By.XPATH, eta_p).text)
+    assert "Arriving in about" in driver.find_element(By.XPATH, eta_p).text, (
+        "no route/ETA shown for the driver-to-pickup leg (SCRUM-69)"
+    )
+
+    loc_1 = _active_driver_location(driver)
+    assert loc_1, "no live driver location in MockWorld state while en route to pickup (SCRUM-68)"
+    time.sleep(6)
+    loc_2 = _active_driver_location(driver)
+    still_en_route = bool(driver.find_elements(By.XPATH, "//h2[contains(text(),'driver is on the way')]"))
+    assert loc_2 and (
+        (loc_2["lat"], loc_2["lng"]) != (loc_1["lat"], loc_1["lng"]) or not still_en_route
+    ), (
+        "the driver's broadcast position did not move over 6s while en route to pickup (SCRUM-68) - "
+        f"before={loc_1}, after={loc_2}"
+    )
+
+    # ---- Leg 2: pickup -> destination (SCRUM-84/85) -----------------------
+    # The driver has to actually arrive (up to 80s move + an 8s wait) and the
+    # trip auto-starts (NPC drivers don't wait on rider input) - the longest
+    # leg in this whole flow, so this gets the most generous timeout.
+    WebDriverWait(driver, 110).until(
+        lambda d: d.find_elements(By.XPATH, "//h2[contains(text(),'Heading to')]")
+    )
+    shot(driver, "trip-in-progress-to-destination")
+
+    eta_d = "//h2[contains(text(),'Heading to')]/following-sibling::p"
+    WebDriverWait(driver, 20).until(lambda d: "On the way" not in d.find_element(By.XPATH, eta_d).text)
+    assert "Arriving in about" in driver.find_element(By.XPATH, eta_d).text, (
+        "no route/ETA shown for the pickup-to-destination leg (SCRUM-85)"
+    )
+
+    loc_3 = _active_driver_location(driver)
+    assert loc_3, "no live driver location in MockWorld state while heading to destination (SCRUM-84)"
+    time.sleep(6)
+    loc_4 = _active_driver_location(driver)
+    still_in_progress = bool(driver.find_elements(By.XPATH, "//h2[contains(text(),'Heading to')]"))
+    assert loc_4 and (
+        (loc_4["lat"], loc_4["lng"]) != (loc_3["lat"], loc_3["lng"]) or not still_in_progress
+    ), (
+        "the driver's broadcast position did not move over 6s while heading to destination (SCRUM-84) - "
+        f"before={loc_3}, after={loc_4}"
+    )
+
+
 # ---------------------------------------------------------------------------
-# Responsive checks, signed in - phone / tablet / desktop (SCRUM-46/47/48/53/
-# 54/56's own screens, not just the anonymous landing page test_ui_smoke.py
-# already covers).
+# Responsive checks, signed in - SCRUM-46/47/48/53/54/56's own screens, not
+# just the anonymous landing page test_ui_smoke.py already covers.
 #
-# These three cover the whole ride-planning flow's own layouts: the rider
-# home page, the pickup/destination planning screen (map + panel side by
-# side on desktop, stacked on phone), and the busiest screen of all -
-# vehicle-selection cards after Search, the layout most likely to overflow
-# on a narrow phone. Every test here uses any_size, not fresh_ride, so the
-# shared browser's viewport gets put back to desktop afterward - see
-# any_size's docstring.
+# Each test asks two different questions at every size, because passing the
+# first does not imply the second:
+#
+#   1. does the PAGE hold together - no sideways scroll (has_horizontal_overflow)
+#   2. are the CONTROLS on it actually usable - fully on screen, not collapsed,
+#      and on a phone big enough to hit with a thumb (control_problems)
+#
+# The overflow check only asks whether the document is wider than the screen,
+# so a control clipped by a container that hides its own overflow, squashed to
+# a sliver, or shrunk below a fingertip sails straight past it. That is the gap
+# the second check closes.
+#
+# The two cheap page-load tests run at all eight VIEWPORTS. The choose-a-ride
+# test has to drive the whole flow (open a destination, wait for the pickup to
+# locate, Search, wait for live fares from trip-matching) before it can measure
+# anything, so it runs at CORE_VIEWPORTS - the three sizes that actually
+# represent different layouts - rather than paying for that flow eight times.
+#
+# Every test here takes any_size, not fresh_ride, so the shared browser's
+# viewport gets put back to desktop afterwards - see any_size's docstring.
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("width,height,label", VIEWPORTS)
-def test_rider_home_does_not_scroll_sideways(any_size, shot, width, height, label):
-    """The signed-in rider home page (recent destinations) must not scroll sideways."""
+def test_rider_home_layout_holds_at_every_size(any_size, shot, width, height, label):
+    """The signed-in rider home page: no sideways scroll, and every recent
+    destination fully on screen and big enough to tap."""
     driver = any_size
     set_viewport(driver, width, height)
     driver.get(f"{APP}/rider")
@@ -426,10 +609,21 @@ def test_rider_home_does_not_scroll_sideways(any_size, shot, width, height, labe
         f"{overflow_detail(driver)}"
     )
 
+    recents = driver.find_elements(By.XPATH, RECENT_BUTTONS_XPATH)
+    assert recents, f"no recent destinations rendered at all at {width}x{height} ({label})"
+    problems = control_problems(driver, recents, touch=is_touch_size(width, height))
+    assert not problems, (
+        f"recent destinations are not usable at {width}x{height} ({label}):\n  - "
+        + "\n  - ".join(problems)
+    )
+
 
 @pytest.mark.parametrize("width,height,label", VIEWPORTS)
-def test_ride_planning_page_does_not_scroll_sideways(any_size, shot, width, height, label):
-    """The pickup/destination planning screen must not scroll sideways either."""
+def test_ride_planning_layout_holds_at_every_size(any_size, shot, width, height, label):
+    """The pickup/destination screen: no sideways scroll, and both address
+    fields reachable and tappable. This is the screen with the map and the
+    panel competing for width, so it is the one most likely to squeeze a
+    field down to nothing rather than overflow outright."""
     driver = any_size
     set_viewport(driver, width, height)
     driver.get(f"{APP}/rider/ride")
@@ -441,12 +635,24 @@ def test_ride_planning_page_does_not_scroll_sideways(any_size, shot, width, heig
         f"{overflow_detail(driver)}"
     )
 
+    fields = driver.find_elements(By.CSS_SELECTOR, f"{PICKUP_SELECTOR}, {DESTINATION_SELECTOR}")
+    assert len(fields) >= 2, (
+        f"expected a pickup and a drop-off field at {width}x{height} ({label}), found {len(fields)}"
+    )
+    problems = control_problems(driver, fields, touch=is_touch_size(width, height))
+    assert not problems, (
+        f"the address fields are not usable at {width}x{height} ({label}):\n  - "
+        + "\n  - ".join(problems)
+    )
 
-@pytest.mark.parametrize("width,height,label", VIEWPORTS)
-def test_choose_a_ride_does_not_scroll_sideways(any_size, shot, width, height, label):
+
+@pytest.mark.parametrize("width,height,label", CORE_VIEWPORTS)
+def test_choose_a_ride_layout_holds_at_every_size(any_size, shot, width, height, label):
     """
     SCRUM-53/54/56's vehicle-selection cards are the densest layout in the
-    flow, and so the one most likely to overflow on a phone-width screen.
+    flow - a row per vehicle type, each carrying an icon, a name, an ETA and a
+    fare - so it is both the most likely to overflow and the most likely to
+    squash a card below a tappable size on a phone.
     """
     driver = any_size
     set_viewport(driver, width, height)
@@ -461,7 +667,15 @@ def test_choose_a_ride_does_not_scroll_sideways(any_size, shot, width, height, l
     search_btn = WebDriverWait(driver, 5).until(
         lambda d: d.find_element(By.XPATH, "//button[normalize-space()='Search']")
     )
+    # The Search button is the one control that has to survive every size: if
+    # it is off screen or squashed there is no way past this step at all.
+    problems = control_problems(driver, [search_btn], touch=is_touch_size(width, height))
+    assert not problems, (
+        f"the Search button is not usable at {width}x{height} ({label}):\n  - "
+        + "\n  - ".join(problems)
+    )
     search_btn.click()
+
     WebDriverWait(driver, 20).until(lambda d: d.find_elements(By.XPATH, "//h2[text()='Choose a ride']"))
     wait_settled(driver)
     shot(driver, f"choose-a-ride-{label}-{width}x{height}")
@@ -469,4 +683,12 @@ def test_choose_a_ride_does_not_scroll_sideways(any_size, shot, width, height, l
     assert not has_horizontal_overflow(driver), (
         f"the choose-a-ride screen scrolls horizontally at {width}x{height} ({label})"
         f"{overflow_detail(driver)}"
+    )
+
+    cards = driver.find_elements(By.XPATH, "//button[.//span[text()='Tuk Tuk']] | //button[.//span[text()='Unavailable']]")
+    assert cards, f"no vehicle options rendered at {width}x{height} ({label})"
+    problems = control_problems(driver, cards, touch=is_touch_size(width, height))
+    assert not problems, (
+        f"the vehicle cards are not usable at {width}x{height} ({label}):\n  - "
+        + "\n  - ".join(problems)
     )

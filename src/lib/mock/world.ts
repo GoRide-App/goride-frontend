@@ -50,6 +50,40 @@ import {
 export const WORLD_KEY = "goride.mock.world.v3";
 const CHANNEL = "goride-mock-world";
 
+// Fallback pool for generateRandomDriver() -- only the seed data's 1-2
+// eligible (Active + online) drivers per vehicle type exist for real
+// matching, so a trip can otherwise dead-end at NO_DRIVER_FOUND just because
+// that one driver is busy on another trip. These let matching always resolve.
+const RANDOM_DRIVER_NAMES = [
+  "Sunil Perera", "Nimal Rathnayake", "Chathura Jayawardena", "Kavindu Senanayake",
+  "Ranjith Abeysekara", "Malith Gunaratne", "Thilina Kumara", "Sachin Wijesinghe",
+  "Anura Dissanayake", "Prasanna Herath", "Chamila Rodrigo", "Buddhika Ekanayake",
+];
+
+const RANDOM_DRIVER_VEHICLES: Record<VehicleTypeCode, { make: string; model: string }[]> = {
+  TUK: [
+    { make: "Bajaj", model: "RE" },
+    { make: "TVS", model: "King" },
+    { make: "Piaggio", model: "Ape" },
+  ],
+  BIKE: [
+    { make: "Honda", model: "Dio" },
+    { make: "Yamaha", model: "FZ" },
+    { make: "TVS", model: "Ntorq" },
+  ],
+  CAR: [
+    { make: "Toyota", model: "Aqua" },
+    { make: "Suzuki", model: "Wagon R" },
+    { make: "Honda", model: "Fit" },
+  ],
+  XL: [
+    { make: "Toyota", model: "KDH" },
+    { make: "Nissan", model: "Caravan" },
+  ],
+};
+
+const RANDOM_DRIVER_COLORS = ["White", "Silver", "Black", "Red", "Blue", "Green"];
+
 interface TripSim {
   ownerTab: string;
   heartbeat: number;
@@ -405,8 +439,11 @@ class MockWorld {
         t.matchRoundReached = sim.round;
         changed = true;
       } else {
-        t.status = "NO_DRIVER_FOUND";
-        this.notify(s, t.riderId, "No drivers available", "We couldn't find a driver after 3 search rounds. Try again or pick another vehicle type.", "trip.noDriver", t.id);
+        // No real driver was found after 3 full rounds -- rather than dead-end
+        // the trip with NO_DRIVER_FOUND, generate a one-off driver of the
+        // rider's selected vehicle type and assign them directly.
+        const randomDriver = this.generateRandomDriver(s, t.vehicleTypeCode, t.pickup);
+        this.assignDriver(s, t, randomDriver, true);
         changed = true;
       }
     }
@@ -430,6 +467,66 @@ class MockWorld {
     const loc = s.locations[d.id];
     if (loc) loc.status = "OnTrip";
     this.notify(s, t.riderId, "Driver confirmed", `${d.name} is on the way in a ${d.profile.vehicleColor ?? ""} ${d.profile.vehicleMake} ${d.profile.vehicleModel} (${d.profile.vehiclePlate}).`, "trip.driverAssigned", t.id);
+  }
+
+  /**
+   * Fallback for when real matching exhausts all 3 rounds with nobody
+   * eligible -- generates a one-off driver of the rider's selected vehicle
+   * type and registers them into the world so a trip never dead-ends at
+   * NO_DRIVER_FOUND just because the seed data only has 1-2 eligible drivers
+   * per type (see RANDOM_DRIVER_* above).
+   */
+  private generateRandomDriver(s: WorldState, vehicleTypeCode: VehicleTypeCode, near: LatLng): Driver {
+    const name = RANDOM_DRIVER_NAMES[Math.floor(Math.random() * RANDOM_DRIVER_NAMES.length)];
+    const options = RANDOM_DRIVER_VEHICLES[vehicleTypeCode];
+    const vehicle = options[Math.floor(Math.random() * options.length)];
+    const color = RANDOM_DRIVER_COLORS[Math.floor(Math.random() * RANDOM_DRIVER_COLORS.length)];
+    const id = uid("usr_driver_random");
+    const plate = `R${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(10 + Math.random() * 90)}`;
+
+    const driver: Driver = {
+      id,
+      name,
+      email: `${id}@goride.lk`,
+      phone: `+94 7${Math.floor(Math.random() * 10)} ${Math.floor(1_000_000 + Math.random() * 8_999_999)}`,
+      role: "Driver",
+      profilePhotoUrl: null,
+      emailVerified: true,
+      phoneVerified: true,
+      rating: Math.round((4 + Math.random()) * 10) / 10,
+      ratingCount: Math.floor(Math.random() * 300),
+      createdAt: new Date().toISOString(),
+      profile: {
+        driverId: id,
+        vehicleMake: vehicle.make,
+        vehicleModel: vehicle.model,
+        vehiclePlate: plate,
+        vehicleColor: color,
+        vehicleTypeCode,
+        licenseNumber: `B${Math.floor(1_000_000 + Math.random() * 8_999_999)}`,
+        licenseExpiry: new Date(Date.now() + 400 * 86_400_000).toISOString().slice(0, 10),
+        status: "Active",
+        verifiedAt: new Date().toISOString(),
+        online: true,
+        documents: [],
+      },
+    };
+
+    s.drivers.push(driver);
+    // Place the new driver a short random distance from pickup so the "en
+    // route to pickup" leg looks like a real short drive, not a teleport.
+    const jitterLat = (Math.random() - 0.5) * 0.02; // roughly ±1km
+    const jitterLng = (Math.random() - 0.5) * 0.02;
+    s.locations[id] = {
+      driverId: id,
+      lat: near.lat + jitterLat,
+      lng: near.lng + jitterLng,
+      heading: Math.floor(Math.random() * 360),
+      status: "OnTrip",
+      lastUpdated: new Date().toISOString(),
+    };
+
+    return driver;
   }
 
   /* ------------------------------------------------------------ */

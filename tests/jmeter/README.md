@@ -7,6 +7,19 @@ Two plans, one per backend the frontend actually calls under load:
 | `goride-auth-load.jmx` | identity-auth (`https://localhost:7136`) | A driver session cookie |
 | `goride-trip-load.jmx` | trip-matching (`http://localhost:8080`) | None - `/fare/estimate` and `/drivers/active` carry no `[Authorize]` |
 
+### Not covered here: SCRUM-68/69/84/85 (driver position + route/ETA during a trip)
+
+These stories (simulated driver position broadcast and route/ETA calculation
+for the driver-to-pickup and pickup-to-destination legs) have no GoRide-owned
+backend behind them to load-test. The whole thing runs client-side: MockWorld
+(`src/lib/mock/world.ts`) drives the simulation on a 1s tick, and
+`lib/geo/providers.ts`'s `getRoute()` calls the **public OSRM API directly
+from the browser** - not `goride-location`, not any service in this repo.
+Load-testing someone else's free public API would be inappropriate, and it
+would not tell you anything about a GoRide backend's capacity anyway. These
+are covered by Selenium instead - see
+`tests/selenium/test_ride_planning.py::test_driver_tracking_to_pickup_and_destination`.
+
 ## `goride-auth-load.jmx` - identity API
 
 Two thread groups, each 10 users ramped over 10 seconds, 5 iterations per user.

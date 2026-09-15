@@ -15,8 +15,8 @@ from selenium.common.exceptions import StaleElementReferenceException, TimeoutEx
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 
-from conftest import (VIEWPORTS, APP, has_horizontal_overflow, overflow_detail,
-                      set_viewport, wait_settled)
+from conftest import (VIEWPORTS, APP, control_problems, has_horizontal_overflow,
+                      overflow_detail, set_viewport, wait_settled)
 
 
 def test_landing_page_loads(driver, shot):
@@ -123,14 +123,23 @@ def test_landing_page_does_not_scroll_sideways(driver, shot, width, height, labe
 
 @pytest.mark.parametrize("width,height,label", VIEWPORTS)
 def test_sign_in_stays_reachable_at_every_size(driver, width, height, label):
-    """A control that falls off the layout on a phone is unusable, not just ugly."""
+    """A control that falls off the layout on a phone is unusable, not just ugly.
+
+    is_displayed() alone only answers "is it in the DOM and not hidden by CSS" -
+    it happily returns True for a link sitting half off the right edge, or one
+    a container has clipped. control_problems() also measures where it actually
+    lands inside the viewport.
+    """
     set_viewport(driver, width, height)
     driver.get(APP)
     wait_settled(driver)
 
     links = driver.find_elements(By.PARTIAL_LINK_TEXT, "Sign in")
     assert links, f"no 'Sign in' link at {width}x{height} ({label})"
-    assert links[0].is_displayed(), f"'Sign in' is hidden at {width}x{height} ({label})"
+    problems = control_problems(driver, links[:1])
+    assert not problems, (
+        f"'Sign in' is not usable at {width}x{height} ({label}):\n  - " + "\n  - ".join(problems)
+    )
 
 
 def test_page_has_no_console_errors(driver):
