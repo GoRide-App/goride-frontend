@@ -45,6 +45,8 @@ export interface MapViewProps {
     sos?: LatLng[];
     /** Pin-drop mode: the map pans under a fixed centre pin; reports the centre on move end. */
     pinDrop?: boolean;
+    /** Label shown above the pin-drop crosshair, e.g. "Pickup here" or "Set as my location". */
+    pinLabel?: string;
     onPinMove?: (pos: LatLng) => void;
     onPinMoveStart?: () => void;
     draggablePickup?: boolean;
@@ -136,6 +138,7 @@ export default function MapView({
     driver,
     sos = [],
     pinDrop,
+    pinLabel = "Pickup here",
     onPinMove,
     onPinMoveStart,
     draggablePickup,
@@ -217,7 +220,7 @@ export default function MapView({
             {pinDrop && (
                 <div className="pointer-events-none absolute left-1/2 top-1/2 z-[401] -translate-x-1/2 -translate-y-full" aria-hidden>
                     <div className="flex flex-col items-center">
-                        <div className="rounded-lg bg-ink px-2.5 py-1 text-[11px] font-semibold text-white shadow-float">Pickup here</div>
+                        <div className="rounded-lg bg-ink px-2.5 py-1 text-[11px] font-semibold text-white shadow-float">{pinLabel}</div>
                         <div className="h-2 w-[3px] bg-ink" />
                         <div className="h-7 w-7 rounded-full border-[5px] border-ink bg-white shadow-float" />
                         <div className="-mt-1 h-2 w-2 rounded-full bg-black/30 blur-[1px]" />

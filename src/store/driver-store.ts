@@ -1,19 +1,23 @@
 "use client";
 
 import { create } from "zustand";
-import type { Driver, DriverLocation, DriverOffer, Trip } from "@/types";
+import type { Driver, DriverLocation, DriverOffer, LatLng, Trip } from "@/types";
 import { api, IS_MOCK, errorMessage, type DriverTripAction } from "@/lib/api";
 import { world } from "@/lib/mock/world";
 import { bearing } from "@/lib/utils";
+import { getCurrentPosition } from "@/lib/geo/providers";
 import { toast } from "@/components/ui/toast";
 
 interface DriverState {
   driver: Driver | null;
+  driverId: string | null;
   loading: boolean;
   online: boolean;
   offer: DriverOffer | null;
   trip: Trip | null;
   location: DriverLocation | null;
+  /** True once the driver has pinned their location manually, pausing the live GPS watch. */
+  manualLocation: boolean;
   busy: boolean;
   error: string | null;
 
@@ -21,6 +25,10 @@ interface DriverState {
   start: (driverId: string) => void;
   stop: () => void;
   setOnline: (online: boolean) => Promise<boolean>;
+  /** Pin the driver's current location by hand (e.g. dragging the map pin); persists it and stops the GPS watch from overriding it. */
+  setManualLocation: (pos: LatLng) => Promise<void>;
+  /** Resume tracking from the device's real GPS position. */
+  recenterGps: () => Promise<void>;
   accept: () => Promise<boolean>;
   decline: () => Promise<void>;
   advance: (action: DriverTripAction, pin?: string) => Promise<boolean>;
@@ -39,18 +47,38 @@ let geoWatch: number | null = null;
 let lastOfferToast = "";
 let lastTripToast = "";
 
-export const useDriverStore = create<DriverState>()((set, get) => ({
+export const useDriverStore = create<DriverState>()((set, get) => {
+  function beginGeoWatch(driverId: string) {
+    let last: { lat: number; lng: number } | null = null;
+    geoWatch = navigator.geolocation.watchPosition(
+      (p) => {
+        const pos = { lat: p.coords.latitude, lng: p.coords.longitude };
+        const heading = p.coords.heading ?? (last ? bearing(last, pos) : 0);
+        last = pos;
+        const st = get();
+        const status = st.trip ? "OnTrip" : st.online ? "Online" : "Offline";
+        set({ location: { driverId, ...pos, heading, status, lastUpdated: new Date().toISOString() }, manualLocation: false });
+        if (st.online) api.location.updateDriverLocation(driverId, pos, heading, status).catch(() => {});
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 5000 },
+    );
+  }
+
+  return {
   driver: null,
+  driverId: null,
   loading: true,
   online: false,
   offer: null,
   trip: null,
   location: null,
+  manualLocation: false,
   busy: false,
   error: null,
 
   async load(driverId) {
-    set({ loading: true });
+    set({ loading: true, driverId });
     try {
       const [driver, trip, offer, location] = await Promise.all([api.drivers.get(driverId), api.trips.activeForDriver(driverId), api.trips.currentOffer(driverId), api.location.getDriverLocation(driverId)]);
       set({ driver, online: driver.profile.online, trip, offer, location, loading: false });
@@ -62,6 +90,7 @@ export const useDriverStore = create<DriverState>()((set, get) => ({
 
   start(driverId) {
     get().stop();
+    set({ driverId });
     unsub = api.trips.subscribeDriver(driverId, (e) => {
       if (e.type === "offer.received" && e.offer) {
         set({ offer: e.offer });
@@ -111,20 +140,7 @@ export const useDriverStore = create<DriverState>()((set, get) => ({
         if (loc) set({ location: loc });
       }, 1000);
     } else if (typeof navigator !== "undefined" && navigator.geolocation) {
-      let last: { lat: number; lng: number } | null = null;
-      geoWatch = navigator.geolocation.watchPosition(
-        (p) => {
-          const pos = { lat: p.coords.latitude, lng: p.coords.longitude };
-          const heading = p.coords.heading ?? (last ? bearing(last, pos) : 0);
-          last = pos;
-          const st = get();
-          const status = st.trip ? "OnTrip" : st.online ? "Online" : "Offline";
-          set({ location: { driverId, ...pos, heading, status, lastUpdated: new Date().toISOString() } });
-          if (st.online) api.location.updateDriverLocation(driverId, pos, heading, status).catch(() => {});
-        },
-        () => {},
-        { enableHighAccuracy: true, maximumAge: 5000 },
-      );
+      beginGeoWatch(driverId);
     }
   },
 
@@ -139,24 +155,86 @@ export const useDriverStore = create<DriverState>()((set, get) => ({
     if (IS_MOCK) world().presenceOwner = null;
   },
 
-  async setOnline(online) {
-    const d = get().driver;
-    if (!d) return false;
-    set({ busy: true, error: null });
-    try {
-      const driver = await api.drivers.setOnline(d.id, online);
-      set({ driver, online: driver.profile.online, busy: false, offer: online ? get().offer : null });
-      if (IS_MOCK && online) {
-        world().presenceOwner = d.id;
-        world().heartbeatDriver(d.id);
-      }
-      toast[online ? "success" : "info"](online ? "You're online" : "You're offline", online ? "We'll send you nearby ride requests." : "You won't receive ride requests.");
-      return true;
-    } catch (e) {
-      set({ busy: false, error: errorMessage(e) });
-      toast.error("Couldn't change availability", errorMessage(e));
-      return false;
+  async setManualLocation(pos) {
+    const driverId = get().driverId;
+    if (!driverId) return;
+    if (geoWatch != null && typeof navigator !== "undefined") {
+      navigator.geolocation.clearWatch(geoWatch);
+      geoWatch = null;
     }
+    const st = get();
+    const status: DriverLocation["status"] = st.trip ? "OnTrip" : st.online ? "Online" : "Offline";
+    set({ location: { driverId, ...pos, heading: 0, status, lastUpdated: new Date().toISOString() }, manualLocation: true });
+    try {
+      await api.location.updateDriverLocation(driverId, pos, 0, status);
+    } catch (e) {
+      toast.error("Couldn't save location", errorMessage(e));
+    }
+  },
+
+  async recenterGps() {
+    const driverId = get().driverId;
+    if (!driverId) return;
+    const { pos } = await getCurrentPosition();
+    const st = get();
+    const status: DriverLocation["status"] = st.trip ? "OnTrip" : st.online ? "Online" : "Offline";
+    set({ location: { driverId, ...pos, heading: 0, status, lastUpdated: new Date().toISOString() }, manualLocation: false });
+    api.location.updateDriverLocation(driverId, pos, 0, status).catch(() => {});
+    if (!IS_MOCK && typeof navigator !== "undefined" && navigator.geolocation) {
+      if (geoWatch != null) navigator.geolocation.clearWatch(geoWatch);
+      beginGeoWatch(driverId);
+    }
+  },
+
+  async setOnline(online) {
+    const driverId = get().driverId;
+    if (!driverId) return false;
+    set({ busy: true, error: null });
+
+    // Best-effort: mock-world bookkeeping, so seeded demo drivers keep their
+    // existing offer/presence simulation working exactly as before. Real
+    // drivers (signed in via Asgardeo) aren't seeded in the mock world, so
+    // this rejects for them — that's fine, availability itself is persisted
+    // below via the location service regardless of whether this succeeds.
+    try {
+      const driver = await api.drivers.setOnline(driverId, online);
+      set({ driver, offer: online ? get().offer : null });
+      if (IS_MOCK && online) {
+        world().presenceOwner = driverId;
+        world().heartbeatDriver(driverId);
+      }
+    } catch {
+      /* ignore — see comment above */
+    }
+
+    set({ online, busy: false });
+
+    // Source of truth: push the new status to goride-location immediately
+    // rather than waiting for the next GPS tick, using whatever position we
+    // already have (or a fresh fix if we don't have one yet).
+    let loc = get().location;
+    const status: DriverLocation["status"] = get().trip ? "OnTrip" : online ? "Online" : "Offline";
+    if (!loc) {
+      try {
+        const { pos } = await getCurrentPosition();
+        loc = { driverId, ...pos, heading: 0, status, lastUpdated: new Date().toISOString() };
+      } catch {
+        loc = null;
+      }
+    }
+    if (loc) {
+      const updated = { ...loc, status };
+      set({ location: updated });
+      try {
+        await api.location.updateDriverLocation(driverId, updated, updated.heading, status);
+      } catch (e) {
+        toast.error("Couldn't save availability", errorMessage(e));
+        return false;
+      }
+    }
+
+    toast[online ? "success" : "info"](online ? "You're online" : "You're offline", online ? "We'll send you nearby ride requests." : "You won't receive ride requests.");
+    return true;
   },
 
   async accept() {
@@ -257,4 +335,5 @@ export const useDriverStore = create<DriverState>()((set, get) => ({
     const [driver, trip] = await Promise.all([api.drivers.get(d.id), api.trips.activeForDriver(d.id)]);
     set({ driver, online: driver.profile.online, trip: trip ?? get().trip });
   },
-}));
+  };
+});

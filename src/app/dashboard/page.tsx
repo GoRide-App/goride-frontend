@@ -121,6 +121,7 @@ function Dashboard({ user }: { user: MeResponse }) {
 
         <div className="mt-8 grid gap-4 lg:grid-cols-2">
           {role === "Rider" && <RiderDashboardLink />}
+          {role === "Driver" && <DriverDashboardLink />}
           <ProfileDashboardLink role={role} />
         </div>
         {role === "Admin" && <AdminDriversTab />}
@@ -143,6 +144,26 @@ function RiderDashboardLink() {
         <span className="block text-xs text-muted">
           Pick a start and destination — see vehicle types and the calculated
           fare.
+        </span>
+      </span>
+      <ArrowRight size={18} className="shrink-0 text-zinc-400" />
+    </Link>
+  );
+}
+
+function DriverDashboardLink() {
+  return (
+    <Link
+      href={ROUTES.driver.home}
+      className="flex items-center gap-4 rounded-xl border border-zinc-200/80 bg-white p-5 shadow-card transition hover:border-ink"
+    >
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-driver-500 text-white">
+        <CarFront size={20} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold">Go online</span>
+        <span className="block text-xs text-muted">
+          See the map, set your location, and start receiving ride requests.
         </span>
       </span>
       <ArrowRight size={18} className="shrink-0 text-zinc-400" />

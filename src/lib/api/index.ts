@@ -1,6 +1,8 @@
 import type {
+  DriverLocation,
   DriverProfile,
   FareOption,
+  LatLng,
   Session,
   User,
   VehicleTypeCode,
@@ -17,6 +19,10 @@ import { mockApi } from "@/lib/mock/api";
 // still needs its own absolute URL.
 const TRIP_API_URL =
   process.env.NEXT_PUBLIC_TRIP_API_URL ?? "http://localhost:8080";
+
+// goride-location is likewise a separate, non-proxied backend.
+const LOCATION_API_URL =
+  process.env.NEXT_PUBLIC_LOCATION_API_URL ?? "http://localhost:8081";
 
 export const API_MODE: "mock" | "http" =
   process.env.NEXT_PUBLIC_API_MODE === "http" ? "http" : "mock";
@@ -134,6 +140,52 @@ export async function estimateFares(
   }));
 }
 
+/* ------------------------------------------------------------------ */
+/* Driver location & availability — Location microservice               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Calls goride-location's POST /location/update — upserts a driver's live
+ * position and status ("Online" == available for trips). This is the single
+ * write path used for GPS updates, manual map pins, and the Available toggle.
+ */
+async function updateDriverLocationLive(
+  driverId: string,
+  pos: LatLng,
+  heading: number,
+  status: DriverLocation["status"],
+): Promise<DriverLocation> {
+  const res = await fetch(`${LOCATION_API_URL}/location/update`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ driverId, lat: pos.lat, lng: pos.lng, heading, status }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Location update failed (${res.status})${text ? `: ${text}` : ""}`);
+  }
+  return res.json();
+}
+
+/** Calls goride-location's GET /location/{driverId}. Returns null if the driver has never reported a location. */
+async function getDriverLocationLive(driverId: string): Promise<DriverLocation | null> {
+  const res = await fetch(`${LOCATION_API_URL}/location/${encodeURIComponent(driverId)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Fetch location failed (${res.status})`);
+  return res.json();
+}
+
+/** Calls goride-location's GET /location/nearby-drivers — drivers currently Online within radiusKm. */
+export async function getNearbyAvailableDrivers(pos: LatLng, radiusKm = 4): Promise<DriverLocation[]> {
+  const url = new URL(`${LOCATION_API_URL}/location/nearby-drivers`);
+  url.searchParams.set("lat", String(pos.lat));
+  url.searchParams.set("lng", String(pos.lng));
+  url.searchParams.set("radiusKm", String(radiusKm));
+  const res = await fetch(url.toString());
+  if (!res.ok) throw new Error(`Fetch nearby drivers failed (${res.status})`);
+  return res.json();
+}
+
 /**
  * Adapter that connects trip estimation directly to the goride-trip-matching backend.
  */
@@ -197,6 +249,26 @@ function createTripApi(): GoRideApi {
         // Fallback: calculate using base logic while enforcing only TUKTUK is allowed
         const estimates = await base.trips.estimate(tripId);
         return estimates;
+      },
+    },
+    location: {
+      ...base.location,
+      async updateDriverLocation(driverId, pos, heading, status) {
+        try {
+          // Call the real goride-location backend
+          await updateDriverLocationLive(driverId, pos, heading, status);
+        } catch (err) {
+          console.warn("[goride-location] live update failed, falling back to mock", err);
+          await base.location.updateDriverLocation(driverId, pos, heading, status);
+        }
+      },
+      async getDriverLocation(driverId) {
+        try {
+          return await getDriverLocationLive(driverId);
+        } catch (err) {
+          console.warn("[goride-location] live fetch failed, falling back to mock", err);
+          return base.location.getDriverLocation(driverId);
+        }
       },
     },
   };
