@@ -91,6 +91,8 @@ interface TripSim {
   roundStartedAt: number;
   declined: string[];
   npc: boolean;
+  /** True while the real trip-matching service is handling this request; the mock matcher then stays out of the way. */
+  live?: boolean;
   /** movement */
   route?: LatLng[];
   routeKm?: number;
@@ -99,6 +101,18 @@ interface TripSim {
   phase?: "toPickup" | "waiting" | "toDestination" | "done";
   waitUntil?: number;
   loadingRoute?: boolean;
+}
+
+/** What the mock world needs to know about a real driver who accepted a live ride request. */
+export interface LiveDriverInfo {
+  id: string;
+  name: string;
+  vehicleMake: string;
+  vehicleModel: string;
+  vehiclePlate: string;
+  vehicleTypeCode: VehicleTypeCode;
+  /** Where they are now; the simulated drive to pickup starts here. */
+  location: LatLng;
 }
 
 export interface WorldState {
@@ -387,7 +401,87 @@ class MockWorld {
     });
   }
 
+  /**
+   * Hand a searching trip over to the real matching service (or take it back).
+   * While live, tickMatching does nothing: no simulated driver may be assigned.
+   * Taking it back restarts the mock search from the top.
+   */
+  setLiveMatching(tripId: string, live: boolean) {
+    this.commit(live ? "trip.live.start" : "trip.live.stop", (s) => {
+      const sim = s.sim[tripId];
+      if (!sim) return;
+      sim.live = live;
+      if (!live) sim.roundStartedAt = Date.now();
+    });
+  }
+
+  /** The real matcher found nobody (or nobody accepted in time). */
+  failLiveMatching(tripId: string) {
+    this.commit("trip.live.noDriver", (s) => {
+      const t = s.trips.find((x) => x.id === tripId);
+      if (!t || !["SEARCHING_DRIVER", "REMATCHING"].includes(t.status)) return;
+      t.status = "NO_DRIVER_FOUND";
+      t.version += 1;
+      if (s.sim[tripId]) s.sim[tripId].live = false;
+    });
+  }
+
+  /**
+   * A real driver accepted: register them in the world (their id is not one of the seeded
+   * demo drivers) and assign them. Assigned as a simulated driver so the rest of the trip
+   * (drive to pickup, ride, complete) plays out on the rider's screen without a driver app
+   * driving those legs.
+   */
+  assignLiveDriver(tripId: string, info: LiveDriverInfo) {
+    this.commit("trip.live.assigned", (s) => {
+      const t = s.trips.find((x) => x.id === tripId);
+      if (!t || !["SEARCHING_DRIVER", "REMATCHING"].includes(t.status)) return;
+
+      let driver = s.drivers.find((d) => d.id === info.id);
+      if (!driver) {
+        driver = {
+          id: info.id,
+          name: info.name,
+          email: `${info.id}@goride.lk`,
+          phone: null,
+          role: "Driver",
+          profilePhotoUrl: null,
+          emailVerified: true,
+          phoneVerified: true,
+          rating: 5,
+          ratingCount: 0,
+          createdAt: new Date().toISOString(),
+          profile: {
+            driverId: info.id,
+            vehicleMake: info.vehicleMake,
+            vehicleModel: info.vehicleModel,
+            vehiclePlate: info.vehiclePlate,
+            vehicleTypeCode: info.vehicleTypeCode,
+            licenseNumber: "",
+            licenseExpiry: "",
+            status: "Active",
+            verifiedAt: new Date().toISOString(),
+            online: true,
+            documents: [],
+          },
+        };
+        s.drivers.push(driver);
+      }
+
+      s.locations[info.id] = {
+        driverId: info.id,
+        lat: info.location.lat,
+        lng: info.location.lng,
+        heading: 0,
+        status: "Online",
+        lastUpdated: new Date().toISOString(),
+      };
+      this.assignDriver(s, t, driver, true);
+    });
+  }
+
   private tickMatching(s: WorldState, t: Trip, sim: TripSim): boolean {
+    if (sim.live) return false;
     let changed = false;
     const now = Date.now();
     const roundCfg = MATCH_ROUNDS[sim.round - 1];

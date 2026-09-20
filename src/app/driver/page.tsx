@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { motion } from "framer-motion";
-import { LocateFixed, MapPinned, X } from "lucide-react";
+import { CheckCircle2, Clock, LocateFixed, MapPin, MapPinned, X } from "lucide-react";
 import type { LatLng } from "@/types";
 import { AppShell } from "@/components/layout/app-shell";
 import { RoleGuard, useCurrentUser } from "@/components/layout/role-guard";
@@ -30,6 +30,94 @@ function DriverHomeFrame() {
         <AppShell user={user} variant="split">
             <DriverMap driverId={user.id} name={user.name} />
         </AppShell>
+    );
+}
+
+/** Re-renders every `ms` so countdowns tick. */
+function useNow(ms: number) {
+    const [now, setNow] = React.useState(() => Date.now());
+    React.useEffect(() => {
+        const timer = setInterval(() => setNow(Date.now()), ms);
+        return () => clearInterval(timer);
+    }, [ms]);
+    return now;
+}
+
+function money(n?: number | null) {
+    return n == null ? null : `Rs ${n.toLocaleString()}`;
+}
+
+/** Ride requests the real matching service has offered this driver, plus the ride they last accepted. */
+function RideRequests({ online }: { online: boolean }) {
+    const offers = useDriverStore((s) => s.liveOffers);
+    const accepted = useDriverStore((s) => s.acceptedOffer);
+    const acceptingTripId = useDriverStore((s) => s.acceptingTripId);
+    const now = useNow(1000);
+
+    if (accepted) {
+        return (
+            <Card className="mt-4 border-green-200 bg-green-50/60">
+                <div className="flex items-start gap-3">
+                    <CheckCircle2 size={22} className="mt-0.5 shrink-0 text-green-600" />
+                    <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold">Ride accepted</p>
+                        <p className="mt-1 text-xs text-muted">Head to the pickup point.</p>
+                        <p className="mt-2 flex items-center gap-1.5 text-sm font-medium">
+                            <MapPin size={14} className="shrink-0" /> {accepted.pickupLocation ?? "Pickup"}
+                        </p>
+                        <p className="mt-0.5 pl-5 text-xs text-muted">to {accepted.dropoffLocation ?? "destination"}</p>
+                        {money(accepted.fare) && <p className="mt-2 text-sm font-semibold">{money(accepted.fare)}</p>}
+                    </div>
+                </div>
+                <Button className="mt-3" size="sm" variant="secondary" onClick={() => useDriverStore.getState().dismissAcceptedOffer()}>
+                    Dismiss
+                </Button>
+            </Card>
+        );
+    }
+
+    if (!online) return null;
+
+    const open = offers.filter((o) => new Date(o.expiresAt).getTime() > now);
+
+    if (open.length === 0) {
+        return <p className="mt-4 text-center text-xs text-muted">Waiting for ride requests near you…</p>;
+    }
+
+    return (
+        <div className="mt-4 flex flex-col gap-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Ride requests</p>
+            {open.map((o) => {
+                const secondsLeft = Math.max(0, Math.ceil((new Date(o.expiresAt).getTime() - now) / 1000));
+                return (
+                    <Card key={o.tripId} className="border-driver-200">
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                                <p className="flex items-center gap-1.5 text-sm font-semibold">
+                                    <MapPin size={14} className="shrink-0 text-driver-600" /> <span className="truncate">{o.pickupLocation ?? "Pickup"}</span>
+                                </p>
+                                <p className="mt-0.5 truncate pl-5 text-xs text-muted">to {o.dropoffLocation ?? "destination"}</p>
+                            </div>
+                            <span className="flex shrink-0 items-center gap-1 rounded-md bg-driver-50 px-2 py-1 text-xs font-semibold text-driver-700">
+                                <Clock size={12} /> {secondsLeft}s
+                            </span>
+                        </div>
+                        <p className="mt-2 text-xs text-muted">
+                            {o.distanceKm.toFixed(1)} km from you{money(o.fare) ? ` · ${money(o.fare)}` : ""}
+                        </p>
+                        <Button
+                            className="mt-3"
+                            variant="driver"
+                            onClick={() => useDriverStore.getState().acceptLiveOffer(o.tripId)}
+                            loading={acceptingTripId === o.tripId}
+                            disabled={acceptingTripId !== null}
+                        >
+                            Accept ride
+                        </Button>
+                    </Card>
+                );
+            })}
+        </div>
     );
 }
 
@@ -167,6 +255,8 @@ function DriverMap({ driverId, name }: { driverId: string; name: string }) {
                             description={online ? "You'll receive nearby ride requests" : "Turn on to start receiving ride requests"}
                         />
                     </Card>
+
+                    <RideRequests online={online} />
 
                     <div className="mt-5 flex flex-col gap-3">
                         <Button variant="secondary" leftIcon={<LocateFixed size={18} />} onClick={handleLocateMe} loading={locating} loadingText="Locating…">

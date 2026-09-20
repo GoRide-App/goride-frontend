@@ -12,6 +12,11 @@ import { normalizeRole } from "@/lib/constants";
 import type { FareEstimate, GoRideApi, Trip } from "./contract";
 import { httpApi } from "./http";
 import { mockApi } from "@/lib/mock/api";
+import {
+  resumeLiveRideRequest,
+  startLiveRideRequest,
+  type LiveMatchingDeps,
+} from "./live-rider-matching";
 
 // identity-auth calls (/api/*, /login, /logout, ...) go through next.config.ts's
 // rewrites() as relative, same-origin paths — no NEXT_PUBLIC_API_URL / CORS
@@ -186,6 +191,17 @@ export async function getNearbyAvailableDrivers(pos: LatLng, radiusKm = 4): Prom
   return res.json();
 }
 
+/** How the rider side looks up a real driver who accepted: their name (identity-auth) and position (goride-location). */
+const liveMatchingDeps: LiveMatchingDeps = {
+  async resolveDriver(driverId) {
+    const [user, loc] = await Promise.allSettled([getInternalUser(driverId), getDriverLocationLive(driverId)]);
+    return {
+      name: user.status === "fulfilled" ? user.value?.username || undefined : undefined,
+      location: loc.status === "fulfilled" && loc.value ? { lat: loc.value.lat, lng: loc.value.lng } : undefined,
+    };
+  },
+};
+
 /**
  * Adapter that connects trip estimation directly to the goride-trip-matching backend.
  */
@@ -249,6 +265,23 @@ function createTripApi(): GoRideApi {
         // Fallback: calculate using base logic while enforcing only TUKTUK is allowed
         const estimates = await base.trips.estimate(tripId);
         return estimates;
+      },
+      // Driver matching goes to the real goride-trip-matching service; the trip itself
+      // stays in the mock world. See live-rider-matching.ts.
+      async request(tripId: string, vehicleTypeId: string): Promise<Trip> {
+        const trip = await base.trips.request(tripId, vehicleTypeId);
+        if (IS_MOCK) void startLiveRideRequest(tripId, liveMatchingDeps);
+        return trip;
+      },
+      async retry(tripId: string, vehicleTypeId?: string): Promise<Trip> {
+        const trip = await base.trips.retry(tripId, vehicleTypeId);
+        if (IS_MOCK) void startLiveRideRequest(tripId, liveMatchingDeps);
+        return trip;
+      },
+      async activeForRider(riderId: string): Promise<Trip | null> {
+        const trip = await base.trips.activeForRider(riderId);
+        if (IS_MOCK && trip) resumeLiveRideRequest(trip.id, liveMatchingDeps);
+        return trip;
       },
     },
     location: {

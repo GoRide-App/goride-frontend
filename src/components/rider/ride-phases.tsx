@@ -558,7 +558,7 @@ export function NoDriverSheet({ trip, vehicleTypes, estimates, onRetry, onRetryW
         </span>
         <div>
           <h2 className="text-lg font-semibold leading-tight">No drivers available right now</h2>
-          <p className="mt-1 text-xs font-normal text-muted">We searched three times up to {MATCH_ROUNDS[2].radiusKm} km and no {vehicleTypes.find((v) => v.id === trip.vehicleTypeId)?.name ?? ""} driver accepted. You haven&apos;t been charged.</p>
+          <p className="mt-1 text-xs font-normal text-muted">No {vehicleTypes.find((v) => v.id === trip.vehicleTypeId)?.name ?? ""} driver is available near your pickup right now, or none accepted in time. You haven&apos;t been charged.</p>
         </div>
       </div>
       <Button className="mt-4" size="lg" leftIcon={<RefreshCw size={16} />} onClick={onRetry} loading={busy}>
