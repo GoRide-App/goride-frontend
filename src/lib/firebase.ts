@@ -21,9 +21,15 @@ export const requestFirebaseToken = async () => {
       if (!supported) return null;
 
       const messaging = getMessaging(app);
+      
+      const swUrl = `/firebase-messaging-sw.js?firebaseConfig=${encodeURIComponent(JSON.stringify(firebaseConfig))}`;
+      const registration = await navigator.serviceWorker.register(swUrl);
+
       const token = await getToken(messaging, {
         vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
+        serviceWorkerRegistration: registration,
       });
+      console.log("FCM Token for testing:", token);
       return token;
     }
   } catch (error) {
