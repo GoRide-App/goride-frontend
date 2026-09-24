@@ -17,7 +17,7 @@ export function FirebaseNotifications() {
     async function initFirebase() {
       try {
         const token = await requestFirebaseToken();
-        if (token && isSubscribed) {
+        if (token && isSubscribed && user) {
           // Register token with backend
           await registerDeviceToken(user.id, token).catch(e => console.warn("Failed to register token", e));
         }
