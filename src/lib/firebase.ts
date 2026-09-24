@@ -32,17 +32,14 @@ export const requestFirebaseToken = async () => {
   }
 };
 
-export const onMessageListener = () => {
-  return new Promise((resolve) => {
-    try {
-      const messaging = getMessaging(app);
-      onMessage(messaging, (payload) => {
-        resolve(payload);
-      });
-    } catch (err) {
-      console.log(err);
-    }
-  });
+export const setupMessageListener = (callback: (payload: any) => void) => {
+  try {
+    const messaging = getMessaging(app);
+    return onMessage(messaging, callback);
+  } catch (err) {
+    console.error("Failed to set up message listener", err);
+    return () => {};
+  }
 };
 
 export { app };

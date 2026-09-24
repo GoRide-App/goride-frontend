@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { requestFirebaseToken, onMessageListener } from "@/lib/firebase";
+import { requestFirebaseToken, setupMessageListener } from "@/lib/firebase";
 import { registerDeviceToken } from "@/lib/api/notification";
 import { useCurrentUser } from "@/components/layout/role-guard";
 import { toast } from "@/components/ui/toast";
@@ -28,25 +28,20 @@ export function FirebaseNotifications() {
 
     initFirebase();
 
+    let unsubscribeMessageListener: (() => void) | undefined;
+    
     // Set up foreground message listener
-    const listen = async () => {
-      try {
-        const payload: any = await onMessageListener();
-        if (payload?.notification) {
-          toast.notify(payload.notification.title, payload.notification.body);
-        }
-        if (isSubscribed) {
-          listen();
-        }
-      } catch (err) {
-        console.error("FCM listener error", err);
+    unsubscribeMessageListener = setupMessageListener((payload: any) => {
+      if (payload?.notification) {
+        toast.notify(payload.notification.title, payload.notification.body);
       }
-    };
-
-    listen();
+    });
 
     return () => {
       isSubscribed = false;
+      if (unsubscribeMessageListener) {
+        unsubscribeMessageListener();
+      }
     };
   }, [user]);
 
