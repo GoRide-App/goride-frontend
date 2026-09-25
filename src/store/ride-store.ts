@@ -100,7 +100,7 @@ function bind(tripId: string, set: (p: Partial<RideState>) => void, get: () => R
       if (prev && sig !== lastToastSig) {
         lastToastSig = sig;
         if (e.trip.status === "DRIVER_ASSIGNED" && prev.status !== "DRIVER_ASSIGNED") toast.notify("Driver confirmed", `${e.trip.driver?.name} is on the way · ${e.trip.driver?.vehiclePlate}`);
-        if (e.trip.status === "DRIVER_ARRIVED" && prev.status !== "DRIVER_ARRIVED") toast.notify("Your driver has arrived", `Share PIN ${e.trip.tripPin} to start the trip`);
+        if (e.trip.status === "DRIVER_ARRIVED" && prev.status !== "DRIVER_ARRIVED") toast.notify("Your driver has arrived", `${e.trip.driver?.name ?? "Your driver"} is waiting at ${e.trip.pickup.name}.`);
         if (e.trip.status === "REMATCHING" && prev.status !== "REMATCHING") toast.warning("Driver cancelled", "Finding you another driver now…");
         if (e.trip.status === "PAYMENT_PENDING" && prev.status !== "PAYMENT_PENDING") toast.notify("You've arrived", "Complete your payment to finish the trip");
         if (e.trip.status === "NO_DRIVER_FOUND" && prev.status !== "NO_DRIVER_FOUND") toast.error("No drivers available", "Try again or choose another vehicle type");

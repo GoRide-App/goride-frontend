@@ -11,7 +11,7 @@ import { MapSplit, PanelBody } from "@/components/layout/map-split";
 import { useSetShellHeader } from "@/components/layout/shell-header";
 import { MapView } from "@/components/map";
 import { Button } from "@/components/ui/button";
-import { OtpInput, Toggle } from "@/components/ui/field";
+import { Toggle } from "@/components/ui/field";
 import { Card } from "@/components/ui/primitives";
 import { Spinner } from "@/components/ui/spinner";
 import { useDriverStore } from "@/store/driver-store";
@@ -65,14 +65,8 @@ const ACTIVE_TRIP_LABEL: Record<string, string> = {
 function ActiveTrip({ offer }: { offer: LiveDriverOffer }) {
     const busy = useDriverStore((s) => s.busy);
     const error = useDriverStore((s) => s.error);
-    const [pin, setPin] = React.useState("");
 
     const done = offer.status === "Completed";
-
-    const startTrip = async () => {
-        const ok = await useDriverStore.getState().advanceLiveTrip("InProgress");
-        if (ok) setPin("");
-    };
 
     return (
         <Card className="mt-4 border-driver-200 bg-driver-50/50">
@@ -95,12 +89,9 @@ function ActiveTrip({ offer }: { offer: LiveDriverOffer }) {
             )}
 
             {offer.status === "Arrived" && (
-                <div className="mt-3">
-                    <OtpInput length={4} value={pin} onChange={setPin} label="Ask the rider for their 4-digit trip PIN to start" autoFocus />
-                    <Button className="mt-2" variant="driver" onClick={startTrip} disabled={pin.length !== 4} loading={busy}>
-                        Start trip
-                    </Button>
-                </div>
+                <Button className="mt-3" variant="driver" onClick={() => useDriverStore.getState().advanceLiveTrip("InProgress")} loading={busy}>
+                    Start trip
+                </Button>
             )}
 
             {offer.status === "InProgress" && (

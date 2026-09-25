@@ -144,7 +144,7 @@ export interface GoRideApi {
     currentOffer(driverId: string): Promise<DriverOffer | null>;
     accept(tripId: string, driverId: string): Promise<Trip>;
     decline(tripId: string, driverId: string): Promise<void>;
-    setDriverStatus(tripId: string, action: DriverTripAction, pin?: string): Promise<Trip>;
+    setDriverStatus(tripId: string, action: DriverTripAction): Promise<Trip>;
     /** Real-time stream for a trip (SignalR in http mode). */
     subscribe(tripId: string, handler: (e: TripEvent) => void): Unsubscribe;
     /** Real-time stream for a driver's offers / assignments. */

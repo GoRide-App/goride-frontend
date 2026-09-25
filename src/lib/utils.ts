@@ -179,10 +179,6 @@ export function pickRandom<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-export function generatePin() {
-  return String(Math.floor(1000 + Math.random() * 9000));
-}
-
 export function isBrowser() {
   return typeof window !== "undefined";
 }

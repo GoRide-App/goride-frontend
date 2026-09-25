@@ -598,10 +598,10 @@ export function EnRouteSheet({ trip, etaMin, onCancel, arrived }: { trip: Trip; 
           {arrived ? "Arrived" : "En route"}
         </Badge>
       </div>
-      <DriverCard driver={trip.driver} pin={trip.tripPin} showPin eta={!arrived && etaMin != null ? `${Math.max(1, Math.round(etaMin))} min` : undefined} />
+      <DriverCard driver={trip.driver} eta={!arrived && etaMin != null ? `${Math.max(1, Math.round(etaMin))} min` : undefined} />
       {arrived && (
         <div className="mt-3 flex items-center gap-2 rounded-xl bg-brand-50 px-3 py-2.5 text-xs font-semibold text-brand-800">
-          <ShieldCheck size={16} /> Check the plate {trip.driver.vehiclePlate} and share your PIN before getting in.
+          <ShieldCheck size={16} /> Check the plate {trip.driver.vehiclePlate} before getting in.
         </div>
       )}
       <TripRoute trip={trip} compact className="mt-3" />

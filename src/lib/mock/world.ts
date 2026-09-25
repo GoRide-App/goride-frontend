@@ -497,7 +497,7 @@ class MockWorld {
       t.version += 1;
       const sim = s.sim[tripId];
       if (sim) sim.phase = "waiting";
-      this.notify(s, t.riderId, "Your driver has arrived", `${t.driver?.name ?? "Your driver"} is waiting at ${t.pickup.name}. PIN: ${t.tripPin}`, "trip.driverArrived", tripId);
+      this.notify(s, t.riderId, "Your driver has arrived", `${t.driver?.name ?? "Your driver"} is waiting at ${t.pickup.name}.`, "trip.driverArrived", tripId);
     });
   }
 

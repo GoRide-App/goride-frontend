@@ -113,7 +113,7 @@ export function VehicleOption({ vt, estimate, selected, onSelect, index = 0 }: {
 /* Driver card                                                          */
 /* ------------------------------------------------------------------ */
 
-export function DriverCard({ driver, pin, showPin, eta, className, contact = true }: { driver: TripDriverSummary; pin?: string | null; showPin?: boolean; eta?: string; className?: string; contact?: boolean }) {
+export function DriverCard({ driver, eta, className, contact = true }: { driver: TripDriverSummary; eta?: string; className?: string; contact?: boolean }) {
   return (
     <div className={cn("flex flex-col gap-3", className)}>
       <div className="flex items-center gap-3">
@@ -140,12 +140,6 @@ export function DriverCard({ driver, pin, showPin, eta, className, contact = tru
             {driver.vehicleColor} {driver.vehicleMake} {driver.vehicleModel}
           </p>
         </div>
-        {showPin && pin && (
-          <div className="rounded-lg bg-ink px-3 py-1.5 text-center text-white">
-            <p className="text-[9px] font-semibold uppercase tracking-widest opacity-70">Trip PIN</p>
-            <p className="text-lg font-bold leading-none tracking-[0.25em]">{pin}</p>
-          </div>
-        )}
       </div>
       {contact && (
         <div className="flex gap-2">

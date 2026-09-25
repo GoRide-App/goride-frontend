@@ -1,7 +1,7 @@
 import type { AdminDashboardStats, Driver, DriverLocation, EarningsSummary, FareEstimate, Payment, Trip, User } from "@/types";
 import type { GoRideApi } from "@/lib/api/contract";
 import { ACTIVE_TRIP_STATUSES, TERMINAL_TRIP_STATUSES } from "@/lib/constants";
-import { generatePin, haversineKm, sleep, uid } from "@/lib/utils";
+import { haversineKm, sleep, uid } from "@/lib/utils";
 import { getRoute, isInsideServiceArea } from "@/lib/geo/providers";
 import { estimateFor } from "./seed";
 import { world } from "./world";
@@ -362,7 +362,6 @@ export const mockApi: GoRideApi = {
         finalFare: null,
         distanceKm: route.distanceKm,
         durationMin: route.durationMin,
-        tripPin: null,
         matchRoundReached: 1,
         version: 0,
         createdAt: new Date().toISOString(),
@@ -427,7 +426,6 @@ export const mockApi: GoRideApi = {
         tr.vehicleTypeId = vt.id;
         tr.vehicleTypeCode = vt.code;
         tr.estimatedFare = estimateFor(vt, tr.distanceKm, tr.durationMin, tr.stops.length).total;
-        tr.tripPin = generatePin();
         tr.requestedAt = new Date().toISOString();
       });
       world().startMatching(tripId);
@@ -548,7 +546,6 @@ export const mockApi: GoRideApi = {
       world().commit("trip.retry", (st) => {
         const tr = st.trips.find((x) => x.id === tripId)!;
         tr.requestedAt = new Date().toISOString();
-        tr.tripPin = generatePin();
         tr.cancelledBy = null;
         tr.cancellationReason = null;
       });
@@ -701,7 +698,7 @@ export const mockApi: GoRideApi = {
         if (sim && !sim.declined.includes(driverId)) sim.declined.push(driverId);
       });
     },
-    async setDriverStatus(tripId, action, pin) {
+    async setDriverStatus(tripId, action) {
       await delay(200);
       const t = world().trip(tripId);
       const allowed: Record<typeof action, Trip["status"][]> = {
@@ -713,7 +710,6 @@ export const mockApi: GoRideApi = {
       if (!allowed[action].includes(t.status)) {
         throw err(409, `Cannot mark trip as ${action} while it is ${t.status.replace(/_/g, " ").toLowerCase()}.`, "INVALID_TRANSITION");
       }
-      if (action === "InProgress" && t.tripPin && pin !== t.tripPin) throw err(400, "Incorrect trip PIN. Ask the rider for their 4-digit PIN.", "INVALID_PIN");
       world().commit(`trip.${action}`, (st) => {
         const tr = st.trips.find((x) => x.id === tripId)!;
         const sim = st.sim[tripId];
@@ -724,7 +720,7 @@ export const mockApi: GoRideApi = {
           tr.status = "DRIVER_ARRIVED";
           tr.arrivedAt = new Date().toISOString();
           if (sim) sim.phase = "waiting";
-          w.notify(st, tr.riderId, "Your driver has arrived", `${tr.driver?.name} is waiting at ${tr.pickup.name}. PIN: ${tr.tripPin}`, "trip.driverArrived", tripId);
+          w.notify(st, tr.riderId, "Your driver has arrived", `${tr.driver?.name} is waiting at ${tr.pickup.name}.`, "trip.driverArrived", tripId);
         } else if (action === "InProgress") {
           w.startTrip(st, tr, sim);
         } else if (action === "Completed") {

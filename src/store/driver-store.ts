@@ -43,7 +43,7 @@ interface DriverState {
   dismissAcceptedOffer: () => void;
   accept: () => Promise<boolean>;
   decline: () => Promise<void>;
-  advance: (action: DriverTripAction, pin?: string) => Promise<boolean>;
+  advance: (action: DriverTripAction) => Promise<boolean>;
   cancel: (reason: string) => Promise<boolean>;
   confirmCash: () => Promise<boolean>;
   rateRider: (stars: number, comment?: string) => Promise<void>;
@@ -343,12 +343,12 @@ export const useDriverStore = create<DriverState>()((set, get) => {
     await api.trips.decline(offer.tripId, driver.id).catch(() => {});
   },
 
-  async advance(action, pin) {
+  async advance(action) {
     const t = get().trip;
     if (!t) return false;
     set({ busy: true, error: null });
     try {
-      const trip = await api.trips.setDriverStatus(t.id, action, pin);
+      const trip = await api.trips.setDriverStatus(t.id, action);
       lastTripToast = `${trip.id}|${trip.status}|${trip.payment?.status}|${trip.payment?.method}`;
       set({ trip, busy: false });
       return true;

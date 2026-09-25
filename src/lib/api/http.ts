@@ -140,7 +140,7 @@ export const httpApi: GoRideApi = {
     currentOffer: (driverId) => http(`/trips/offers/current`, { query: { driverId } }),
     accept: (tripId, driverId) => http(`/trips/${tripId}/accept`, { method: "POST", json: { driverId } }),
     decline: (tripId, driverId) => http(`/trips/${tripId}/decline`, { method: "POST", json: { driverId } }),
-    setDriverStatus: (tripId, action, pin) => http(`/trips/${tripId}/status`, { method: "PUT", json: { action, pin } }),
+    setDriverStatus: (tripId, action) => http(`/trips/${tripId}/status`, { method: "PUT", json: { action } }),
     subscribe: (tripId, handler) => subscribeHub(`trip:${tripId}`, handler),
     subscribeDriver: (driverId, handler) => subscribeHub(`driver:${driverId}`, handler),
   },

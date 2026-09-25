@@ -310,7 +310,6 @@ export function buildHistoryTrip(h: HistorySeed): Trip {
     finalFare: h.status === "PAID" ? finalTotal : null,
     distanceKm,
     durationMin,
-    tripPin: null,
     cancellationReason: h.status === "CANCELLED" ? (h.cancelledBy === "Driver" ? "Rider not at pickup" : "Changed my plans") : null,
     cancellationFee: h.status === "CANCELLED" && h.cancelledBy === "Rider" ? 0 : null,
     cancelledBy: h.cancelledBy ?? null,
