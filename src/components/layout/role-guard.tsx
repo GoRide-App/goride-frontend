@@ -6,6 +6,7 @@ import type { Role } from "@/types";
 import { useAuthStore } from "@/lib/auth/session";
 import { homeForRole, identityLoginUrl } from "@/lib/constants";
 import { FullScreenLoader } from "@/components/ui/spinner";
+import { FirebaseNotifications } from "@/components/firebase-notifications";
 
 /**
  * RoleGuard — AUTH-08 route guard. Waits for session hydration, bounces
@@ -34,7 +35,12 @@ export function RoleGuard({ role, children }: { role: Role | Role[]; children: R
   }, [hydrated, session, allowed, router, pathname]);
 
   if (!hydrated || !session || !allowed) return <FullScreenLoader label={!hydrated ? "Loading…" : "Redirecting…"} />;
-  return <>{children}</>;
+  return (
+    <>
+      <FirebaseNotifications />
+      {children}
+    </>
+  );
 }
 
 /** Redirect signed-in users away from auth pages. */
