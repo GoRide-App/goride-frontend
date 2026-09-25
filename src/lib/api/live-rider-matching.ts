@@ -15,6 +15,8 @@ import { toast } from "@/components/ui/toast";
 import { world, type LiveDriverInfo } from "@/lib/mock/world";
 import { getRideRequestStatusLive, requestRideLive } from "./live-matching";
 
+const ASSIGNED_STATUSES = ["DRIVER_ASSIGNED", "DRIVER_EN_ROUTE", "DRIVER_ARRIVED", "TRIP_IN_PROGRESS"];
+
 const POLL_MS = 2000;
 const RESOLVE_TIMEOUT_MS = 2500;
 /** Offers lapse after DRIVER_OFFER_TTL_SECONDS; allow a little grace, then stop waiting. */
@@ -44,6 +46,7 @@ export async function startLiveRideRequest(tripId: string, deps: LiveMatchingDep
       tripId,
       riderId: trip.riderId,
       pickup: trip.pickup,
+      dropoff: trip.destination,
       vehicleTypeCode: trip.vehicleTypeCode,
       pickupLocation: trip.pickup.name,
       dropoffLocation: trip.destination.name,
@@ -69,8 +72,13 @@ export async function startLiveRideRequest(tripId: string, deps: LiveMatchingDep
 export function resumeLiveRideRequest(tripId: string, deps: LiveMatchingDeps): void {
   const s = world().get();
   const trip = s.trips.find((t) => t.id === tripId);
-  if (!trip || !SEARCHING.includes(trip.status) || !s.sim[tripId]?.live || polling.has(tripId)) return;
-  watchOutcome(tripId, deps, new Date(trip.requestedAt ?? Date.now()).getTime());
+  if (!trip || !s.sim[tripId]?.live) return;
+
+  if (SEARCHING.includes(trip.status)) {
+    if (!polling.has(tripId)) watchOutcome(tripId, deps, new Date(trip.requestedAt ?? Date.now()).getTime());
+  } else if (ASSIGNED_STATUSES.includes(trip.status)) {
+    watchLiveTripStatus(tripId);
+  }
 }
 
 function watchOutcome(tripId: string, deps: LiveMatchingDeps, startedAt: number) {
@@ -115,11 +123,52 @@ function watchOutcome(tripId: string, deps: LiveMatchingDeps, startedAt: number)
           vehicleTypeCode: VEHICLE_CODES.includes(code as VehicleTypeCode) ? (code as VehicleTypeCode) : trip.vehicleTypeCode,
           location: resolved.location ?? trip.pickup,
         } satisfies LiveDriverInfo);
+        watchLiveTripStatus(tripId);
         return finish();
       }
     } catch (err) {
       // A failed poll just means try again; GIVE_UP_MS bounds the wait.
       console.warn("[goride-trip-matching] checking the ride request failed, will retry", err);
+    }
+
+    setTimeout(step, POLL_MS);
+  };
+
+  setTimeout(step, POLL_MS);
+}
+
+const progressPolling = new Set<string>();
+
+/**
+ * Once a real driver is assigned, keep polling the same status endpoint for the stages they
+ * report themselves from their own device (Arrived / InProgress / Completed) and bridge each one
+ * into the mock trip so the rider's existing sheets react to them, same as the simulated flow.
+ */
+function watchLiveTripStatus(tripId: string) {
+  if (progressPolling.has(tripId)) return;
+  progressPolling.add(tripId);
+  const finish = () => progressPolling.delete(tripId);
+
+  const step = async () => {
+    const w = world();
+    const trip = w.get().trips.find((t) => t.id === tripId);
+    if (!trip || !ASSIGNED_STATUSES.includes(trip.status)) return finish(); // cancelled, or wrapped up locally already
+
+    try {
+      const status = await getRideRequestStatusLive(tripId);
+
+      if (status.status === "Arrived" && trip.status !== "DRIVER_ARRIVED") {
+        w.markLiveArrived(tripId);
+      } else if (status.status === "InProgress" && trip.status !== "TRIP_IN_PROGRESS") {
+        w.startLiveTrip(tripId);
+      } else if (status.status === "Completed") {
+        w.completeLiveTrip(tripId);
+        return finish();
+      }
+    } catch (err) {
+      // A failed poll just means try again; there's no give-up bound here since the driver
+      // could be mid-trip for a long time.
+      console.warn("[goride-trip-matching] checking trip progress failed, will retry", err);
     }
 
     setTimeout(step, POLL_MS);

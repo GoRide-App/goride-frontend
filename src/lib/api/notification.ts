@@ -1,6 +1,8 @@
 import { getAccessToken } from "@/lib/auth/session";
 
-const NOTIFICATION_API_URL = (process.env.NEXT_PUBLIC_NOTIFICATION_API_URL ?? "http://localhost:8084").replace(/\/+$/, "");
+// goride-notification's docker-compose maps 8083 -> 8080; that's the default here, matching
+// how NEXT_PUBLIC_TRIP_API_URL defaults to trip-matching's own docker-compose port elsewhere.
+const NOTIFICATION_API_URL = (process.env.NEXT_PUBLIC_NOTIFICATION_API_URL ?? "http://localhost:8083").replace(/\/+$/, "");
 
 export async function registerDeviceToken(riderId: string, token: string): Promise<void> {
   const accessToken = getAccessToken();

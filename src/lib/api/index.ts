@@ -292,8 +292,11 @@ function createTripApi(): GoRideApi {
           await updateDriverLocationLive(driverId, pos, heading, status);
         } catch (err) {
           console.warn("[goride-location] live update failed, falling back to mock", err);
-          await base.location.updateDriverLocation(driverId, pos, heading, status);
         }
+        // Always mirror into the mock world too: a human-driven trip's rider map
+        // and the driver's own map both read the driver's position from here, not
+        // from goride-location directly.
+        await base.location.updateDriverLocation(driverId, pos, heading, status);
       },
       async getDriverLocation(driverId) {
         try {

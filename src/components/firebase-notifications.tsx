@@ -28,12 +28,10 @@ export function FirebaseNotifications() {
 
     initFirebase();
 
-    let unsubscribeMessageListener: (() => void) | undefined;
-    
     // Set up foreground message listener
-    unsubscribeMessageListener = setupMessageListener((payload: any) => {
+    const unsubscribeMessageListener = setupMessageListener((payload) => {
       if (payload?.notification) {
-        toast.notify(payload.notification.title, payload.notification.body);
+        toast.notify(payload.notification.title ?? "New notification", payload.notification.body ?? "");
       }
     });
 
