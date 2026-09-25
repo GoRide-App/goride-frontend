@@ -6,7 +6,7 @@ import { api, IS_MOCK, errorMessage, type DriverTripAction } from "@/lib/api";
 import { world } from "@/lib/mock/world";
 import { bearing } from "@/lib/utils";
 import { getCurrentPosition } from "@/lib/geo/providers";
-import { acceptOfferLive, getPendingOffersLive, LiveMatchingError, type LiveDriverOffer } from "@/lib/api/live-matching";
+import { acceptOfferLive, getPendingOffersLive, updateTripStatusLive, LiveMatchingError, type LiveDriverOffer, type TripStatusAction } from "@/lib/api/live-matching";
 import { toast } from "@/components/ui/toast";
 
 interface DriverState {
@@ -38,6 +38,8 @@ interface DriverState {
   recenterGps: () => Promise<void>;
   /** Accept a ride request from the real matching service. Resolves true if this driver got the ride. */
   acceptLiveOffer: (tripId: string) => Promise<boolean>;
+  /** Advance the accepted trip one stage (Arrived / InProgress / Completed). Resolves true on success. */
+  advanceLiveTrip: (action: TripStatusAction) => Promise<boolean>;
   dismissAcceptedOffer: () => void;
   accept: () => Promise<boolean>;
   decline: () => Promise<void>;
@@ -242,6 +244,22 @@ export const useDriverStore = create<DriverState>()((set, get) => {
       const gone = e instanceof LiveMatchingError && (e.status === 404 || e.status === 409);
       set({ acceptingTripId: null, liveOffers: gone ? get().liveOffers.filter((o) => o.tripId !== tripId) : get().liveOffers });
       toast.error(gone ? "Too late" : "Couldn't accept the ride", errorMessage(e));
+      return false;
+    }
+  },
+
+  async advanceLiveTrip(action) {
+    const offer = get().acceptedOffer;
+    const driverId = get().driverId;
+    if (!offer || !driverId) return false;
+    set({ busy: true, error: null });
+    try {
+      const updated = await updateTripStatusLive(offer.tripId, driverId, action);
+      set({ acceptedOffer: updated, busy: false });
+      return true;
+    } catch (e) {
+      set({ busy: false, error: errorMessage(e) });
+      toast.error("Couldn't update the trip", errorMessage(e));
       return false;
     }
   },

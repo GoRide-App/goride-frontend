@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getMessaging, getToken, onMessage, isSupported } from "firebase/messaging";
+import { getMessaging, getToken, onMessage, isSupported, type MessagePayload } from "firebase/messaging";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -38,7 +38,7 @@ export const requestFirebaseToken = async () => {
   }
 };
 
-export const setupMessageListener = (callback: (payload: any) => void) => {
+export const setupMessageListener = (callback: (payload: MessagePayload) => void) => {
   try {
     const messaging = getMessaging(app);
     return onMessage(messaging, callback);

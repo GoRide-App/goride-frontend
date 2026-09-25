@@ -38,6 +38,7 @@ export interface RideRequestPayload {
   tripId: string;
   riderId: string;
   pickup: LatLng;
+  dropoff: LatLng;
   vehicleTypeCode: string;
   pickupLocation?: string;
   dropoffLocation?: string;
@@ -74,6 +75,8 @@ export function requestRideLive(p: RideRequestPayload): Promise<RideRequestResul
       vehicleTypeCode: p.vehicleTypeCode,
       pickupLocation: p.pickupLocation,
       dropoffLocation: p.dropoffLocation,
+      dropoffLat: p.dropoff.lat,
+      dropoffLng: p.dropoff.lng,
       fare: p.fare,
     }),
   });
@@ -81,8 +84,9 @@ export function requestRideLive(p: RideRequestPayload): Promise<RideRequestResul
 
 export interface RideRequestStatus {
   tripId: string;
-  status: "Searching" | "Accepted" | "NoDriver";
-  /** Present when status is "Accepted". */
+  /** "Searching", "NoDriver", or the accepted driver's trip stage. */
+  status: "Searching" | "NoDriver" | "Accepted" | "Arrived" | "InProgress" | "Completed";
+  /** Present once status is "Accepted" or later. */
   driver?: {
     driverId: string;
     vehicleTypeCode: string;
@@ -90,6 +94,14 @@ export interface RideRequestStatus {
     vehicleModel: string;
     vehiclePlate: string;
   } | null;
+  /** Trip details, present once status is "Accepted" or later. */
+  pickupLocation?: string | null;
+  pickupLat?: number | null;
+  pickupLng?: number | null;
+  dropoffLocation?: string | null;
+  dropoffLat?: number | null;
+  dropoffLng?: number | null;
+  fare?: number | null;
 }
 
 export function getRideRequestStatusLive(tripId: string): Promise<RideRequestStatus> {
@@ -102,10 +114,15 @@ export interface LiveDriverOffer {
   tripId: string;
   driverId: string;
   riderId: string;
+  /** Pending/Accepted/Declined/Expired, or -- once accepted -- Arrived/InProgress/Completed. */
   status: string;
   distanceKm: number;
   pickupLocation?: string | null;
+  pickupLat?: number | null;
+  pickupLng?: number | null;
   dropoffLocation?: string | null;
+  dropoffLat?: number | null;
+  dropoffLng?: number | null;
   fare?: number | null;
   createdAt: string;
   /** When this offer stops being acceptable (ISO, UTC). */
@@ -125,5 +142,18 @@ export function acceptOfferLive(tripId: string, driverId: string): Promise<LiveD
   return call(`/matching/offers/${encodeURIComponent(tripId)}/accept`, {
     method: "POST",
     body: JSON.stringify({ driverId }),
+  });
+}
+
+export type TripStatusAction = "Arrived" | "InProgress" | "Completed";
+
+/**
+ * The driver advances their accepted trip one stage at a time. Rejects with LiveMatchingError:
+ * 404 = this driver has no accepted trip with that id, 409 = not the next valid stage.
+ */
+export function updateTripStatusLive(tripId: string, driverId: string, action: TripStatusAction): Promise<LiveDriverOffer> {
+  return call(`/matching/offers/${encodeURIComponent(tripId)}/status`, {
+    method: "POST",
+    body: JSON.stringify({ driverId, action }),
   });
 }
