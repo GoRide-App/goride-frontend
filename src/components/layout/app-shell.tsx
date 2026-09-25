@@ -128,7 +128,9 @@ export function AppShell({
 
   const brand = (
     <div className="mb-6 flex items-center justify-between px-6">
-      <Logo variant="white" height={24} />
+      <Link href={ROUTES.dashboard} className="block transition-opacity hover:opacity-80">
+        <Logo variant="white" height={24} />
+      </Link>
       <span className="rounded-md bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/70">
         {user.role ?? "rider"}
       </span>
@@ -167,7 +169,9 @@ export function AppShell({
               transition={{ type: "spring", stiffness: 380, damping: 38 }}
             >
               <div className="mb-6 flex items-center justify-between px-5">
-                <Logo variant="white" height={22} />
+                <Link href={ROUTES.dashboard} onClick={() => setOpen(false)} className="block transition-opacity hover:opacity-80">
+                  <Logo variant="white" height={22} />
+                </Link>
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
