@@ -1,19 +1,23 @@
 "use client";
 
 import * as React from "react";
-import { motion } from "framer-motion";
-import { CheckCircle2, Clock, LocateFixed, MapPin, MapPinned, X } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { Check, MapPinned, X } from "lucide-react";
 import type { LatLng } from "@/types";
 import type { LiveDriverOffer } from "@/lib/api/live-matching";
 import { AppShell } from "@/components/layout/app-shell";
 import { RoleGuard, useCurrentUser } from "@/components/layout/role-guard";
-import { MapSplit, PanelBody } from "@/components/layout/map-split";
+import { MapSplit, PanelBody, PanelFooter, PanelHeader } from "@/components/layout/map-split";
 import { useSetShellHeader } from "@/components/layout/shell-header";
 import { MapView } from "@/components/map";
-import { Button } from "@/components/ui/button";
-import { Toggle } from "@/components/ui/field";
-import { Card } from "@/components/ui/primitives";
+import { Button, IconButton } from "@/components/ui/button";
+import { fadeOnly, fades, itemVariants, listVariants } from "@/components/ui/motion";
 import { Spinner } from "@/components/ui/spinner";
+import { useIsMobile } from "@/components/ui/use-media";
+import { ACTIVE_OFFER_STATUSES, ActiveTripAction, ActiveTripCard } from "@/components/driver/active-trip-card";
+import { GoOnlineCard } from "@/components/driver/go-online-card";
+import { LocationCard } from "@/components/driver/location-card";
+import { ListeningCard, OfferCard, money } from "@/components/driver/offer-card";
 import { useDriverStore } from "@/store/driver-store";
 import { reverseGeocode } from "@/lib/geo/providers";
 
@@ -34,137 +38,50 @@ function DriverHomeFrame() {
     );
 }
 
-/** Re-renders every `ms` so countdowns tick. */
-function useNow(ms: number) {
+/** Re-renders every `ms` so countdowns tick; idle while `enabled` is false. */
+function useNow(ms: number, enabled = true) {
     const [now, setNow] = React.useState(() => Date.now());
     React.useEffect(() => {
+        if (!enabled) return;
         const timer = setInterval(() => setNow(Date.now()), ms);
         return () => clearInterval(timer);
-    }, [ms]);
+    }, [ms, enabled]);
     return now;
 }
 
-function money(n?: number | null) {
-    return n == null ? null : `Rs ${n.toLocaleString()}`;
-}
-
-/** Statuses that mean "this driver has an accepted trip on their hands right now". */
-const ACTIVE_OFFER_STATUSES = ["Accepted", "Arrived", "InProgress", "Completed"];
-
-const ACTIVE_TRIP_LABEL: Record<string, string> = {
-    Accepted: "Head to the pickup point",
-    Arrived: "Waiting at pickup",
-    InProgress: "Trip in progress",
-};
-
 /**
- * The trip this driver is currently on, with manual controls to mark arrival, start, and
- * complete it. Backed entirely by the real trip-matching service (not the local mock trip),
- * since the rider is very likely on a different device that has no way to share local state.
+ * Ride requests the real matching service has offered this driver (polled by the
+ * store while online). "Not now" only hides a request on this screen; the service
+ * has no decline call, so the offer simply expires on its own.
  */
-function ActiveTrip({ offer }: { offer: LiveDriverOffer }) {
-    const busy = useDriverStore((s) => s.busy);
-    const error = useDriverStore((s) => s.error);
-
-    const done = offer.status === "Completed";
-
-    return (
-        <Card className="mt-4 border-driver-200 bg-driver-50/50">
-            <div className="flex items-start gap-3">
-                <CheckCircle2 size={22} className="mt-0.5 shrink-0 text-driver-600" />
-                <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold">{done ? "Trip completed" : (ACTIVE_TRIP_LABEL[offer.status] ?? "Ride accepted")}</p>
-                    <p className="mt-2 flex items-center gap-1.5 text-sm font-medium">
-                        <MapPin size={14} className="shrink-0" /> {offer.pickupLocation ?? "Pickup"}
-                    </p>
-                    <p className="mt-0.5 pl-5 text-xs text-muted">to {offer.dropoffLocation ?? "destination"}</p>
-                    {money(offer.fare) && <p className="mt-2 text-sm font-semibold">{money(offer.fare)}</p>}
-                </div>
-            </div>
-
-            {offer.status === "Accepted" && (
-                <Button className="mt-3" variant="driver" onClick={() => useDriverStore.getState().advanceLiveTrip("Arrived")} loading={busy}>
-                    I&apos;ve arrived
-                </Button>
-            )}
-
-            {offer.status === "Arrived" && (
-                <Button className="mt-3" variant="driver" onClick={() => useDriverStore.getState().advanceLiveTrip("InProgress")} loading={busy}>
-                    Start trip
-                </Button>
-            )}
-
-            {offer.status === "InProgress" && (
-                <Button className="mt-3" variant="driver" onClick={() => useDriverStore.getState().advanceLiveTrip("Completed")} loading={busy}>
-                    Complete trip
-                </Button>
-            )}
-
-            {done && (
-                <>
-                    <p className="mt-3 text-xs text-muted">Fare {money(offer.fare) ?? "pending"} — awaiting rider payment.</p>
-                    <Button className="mt-3" size="sm" variant="secondary" onClick={() => useDriverStore.getState().dismissAcceptedOffer()}>
-                        Done
-                    </Button>
-                </>
-            )}
-            {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
-        </Card>
-    );
-}
-
-/** Ride requests the real matching service has offered this driver, plus the ride they're currently on. */
-function RideRequests({ online }: { online: boolean }) {
-    const offers = useDriverStore((s) => s.liveOffers);
-    const accepted = useDriverStore((s) => s.acceptedOffer);
+function RideRequests({ offers, now, near, onDismiss, acceptInFooter }: { offers: LiveDriverOffer[]; now: number; near: string | null; onDismiss: (tripId: string) => void; acceptInFooter: boolean }) {
     const acceptingTripId = useDriverStore((s) => s.acceptingTripId);
-    const now = useNow(1000);
-
-    if (accepted && ACTIVE_OFFER_STATUSES.includes(accepted.status)) {
-        return <ActiveTrip offer={accepted} />;
-    }
-
-    if (!online) return null;
-
-    const open = offers.filter((o) => new Date(o.expiresAt).getTime() > now);
-
-    if (open.length === 0) {
-        return <p className="mt-4 text-center text-xs text-muted">Waiting for ride requests near you…</p>;
-    }
 
     return (
-        <div className="mt-4 flex flex-col gap-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Ride requests</p>
-            {open.map((o) => {
-                const secondsLeft = Math.max(0, Math.ceil((new Date(o.expiresAt).getTime() - now) / 1000));
-                return (
-                    <Card key={o.tripId} className="border-driver-200">
-                        <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                                <p className="flex items-center gap-1.5 text-sm font-semibold">
-                                    <MapPin size={14} className="shrink-0 text-driver-600" /> <span className="truncate">{o.pickupLocation ?? "Pickup"}</span>
-                                </p>
-                                <p className="mt-0.5 truncate pl-5 text-xs text-muted">to {o.dropoffLocation ?? "destination"}</p>
-                            </div>
-                            <span className="flex shrink-0 items-center gap-1 rounded-md bg-driver-50 px-2 py-1 text-xs font-semibold text-driver-700">
-                                <Clock size={12} /> {secondsLeft}s
-                            </span>
-                        </div>
-                        <p className="mt-2 text-xs text-muted">
-                            {o.distanceKm.toFixed(1)} km from you{money(o.fare) ? ` · ${money(o.fare)}` : ""}
-                        </p>
-                        <Button
-                            className="mt-3"
-                            variant="driver"
-                            onClick={() => useDriverStore.getState().acceptLiveOffer(o.tripId)}
-                            loading={acceptingTripId === o.tripId}
-                            disabled={acceptingTripId !== null}
-                        >
-                            Accept ride
-                        </Button>
-                    </Card>
-                );
-            })}
+        <div className="flex flex-col gap-3" aria-live="polite">
+            <AnimatePresence initial={false}>
+                {offers.length === 0 ? (
+                    <motion.div key="listening" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: fades.exit }} transition={fades.normal}>
+                        <ListeningCard near={near} />
+                    </motion.div>
+                ) : (
+                    offers.map((o) => {
+                        const secondsLeft = Math.max(0, Math.ceil((new Date(o.expiresAt).getTime() - now) / 1000));
+                        return (
+                            <OfferCard
+                                key={o.tripId}
+                                offer={o}
+                                secondsLeft={secondsLeft}
+                                accepting={acceptingTripId === o.tripId}
+                                disabled={acceptingTripId !== null}
+                                onAccept={() => useDriverStore.getState().acceptLiveOffer(o.tripId)}
+                                onDismiss={() => onDismiss(o.tripId)}
+                                acceptInFooter={acceptInFooter}
+                            />
+                        );
+                    })
+                )}
+            </AnimatePresence>
         </div>
     );
 }
@@ -174,7 +91,15 @@ function DriverMap({ driverId, name }: { driverId: string; name: string }) {
     const location = useDriverStore((s) => s.location);
     const manualLocation = useDriverStore((s) => s.manualLocation);
     const busy = useDriverStore((s) => s.busy);
+    const error = useDriverStore((s) => s.error);
+    const driver = useDriverStore((s) => s.driver);
     const acceptedOffer = useDriverStore((s) => s.acceptedOffer);
+    const liveOffers = useDriverStore((s) => s.liveOffers);
+    const acceptingTripId = useDriverStore((s) => s.acceptingTripId);
+    const mobile = useIsMobile();
+    const reduce = useReducedMotion();
+    const item = reduce ? fadeOnly : itemVariants;
+    const firstName = name.split(" ")[0];
 
     const activeOffer = acceptedOffer && ACTIVE_OFFER_STATUSES.includes(acceptedOffer.status) ? acceptedOffer : null;
     const activePickupLat = activeOffer?.pickupLat;
@@ -190,6 +115,15 @@ function DriverMap({ driverId, name }: { driverId: string; name: string }) {
         [activeDropoffLat, activeDropoffLng],
     );
 
+    // Open offers: not yet expired and not hidden with "Not now". Ticks only while there is something to count down.
+    const now = useNow(1000, online && liveOffers.length > 0);
+    const [dismissed, setDismissed] = React.useState<string[]>([]);
+    const openOffers = React.useMemo(
+        () => (online ? liveOffers.filter((o) => new Date(o.expiresAt).getTime() > now && !dismissed.includes(o.tripId)) : []),
+        [online, liveOffers, now, dismissed],
+    );
+    const dismissOffer = React.useCallback((tripId: string) => setDismissed((d) => [...d, tripId]), []);
+
     const [locating, setLocating] = React.useState(false);
     const [pinDrop, setPinDrop] = React.useState(false);
     const [pinPos, setPinPos] = React.useState<LatLng | null>(null);
@@ -201,7 +135,7 @@ function DriverMap({ driverId, name }: { driverId: string; name: string }) {
 
     useSetShellHeader({
         title: online ? "You're online" : "You're offline",
-        description: online ? "Nearby riders can be matched to you" : `Good to see you, ${name.split(" ")[0]}`,
+        description: online ? "Nearby riders can be matched to you" : `Good to see you, ${firstName}`,
     });
 
     React.useEffect(() => {
@@ -278,8 +212,18 @@ function DriverMap({ driverId, name }: { driverId: string; name: string }) {
         return location ? [location, target] : [target];
     }, [pinDrop, activeOffer, activePickup, activeDestination, location]);
 
+    const vehicle = driver?.profile ? { make: driver.profile.vehicleMake, model: driver.profile.vehicleModel, plate: driver.profile.vehiclePlate } : null;
+    const addressText = addressResolving ? "Locating…" : addressLabel ?? (location ? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}` : "Location not available yet");
+    const setOnline = (v: boolean) => useDriverStore.getState().setOnline(v);
+    // The big availability card steps aside as soon as there is a request or a trip to act on,
+    // so the thing that matters is at the top of the sheet even at its resting height.
+    const compactOnline = !!activeOffer || openOffers.length > 0;
+    // Phones: the first open request's Accept is pinned in the footer so it never hides under the tab bar.
+    const footerOffer = mobile && !activeOffer ? (openOffers[0] ?? null) : null;
+
     return (
         <MapSplit
+            ariaLabel="Driver console"
             map={
                 <MapView
                     center={pinDrop || activeOffer ? undefined : location ?? undefined}
@@ -297,63 +241,85 @@ function DriverMap({ driverId, name }: { driverId: string; name: string }) {
             }
         >
             {pinDrop ? (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex min-h-0 flex-1 flex-col">
-                    <div className="mx-auto flex w-full max-w-[620px] items-center gap-2 border-b border-zinc-200/80 px-5 py-3.5">
-                        <MapPinned size={18} className="shrink-0 text-driver-600" />
-                        <p className="min-w-0 flex-1 text-xs font-semibold">Drag the map to place your location pin</p>
-                        <button type="button" onClick={() => setPinDrop(false)} aria-label="Cancel" className="rounded-lg p-1.5 hover:bg-surface-2">
-                            <X size={16} />
-                        </button>
-                    </div>
-                    <div className="mx-auto flex w-full max-w-[620px] flex-1 flex-col justify-center px-5 py-6">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Your location</p>
-                        <p className="mt-1 flex items-center gap-2 text-lg font-semibold leading-snug">
-                            {resolvingPin && <Spinner className="h-4 w-4 shrink-0 text-driver-600" />} {pinLabel || "Locating…"}
-                        </p>
-                        <Button className="mt-5" size="lg" variant="driver" onClick={confirmPin} disabled={resolvingPin || confirmingPin} loading={confirmingPin}>
-                            Confirm location
-                        </Button>
-                    </div>
-                </motion.div>
-            ) : (
-                <PanelBody>
-                    <h2 className="text-2xl font-semibold leading-tight tracking-tight">Hi, {name.split(" ")[0]}</h2>
-
-                    <Card className="mt-4">
-                        <Toggle
-                            checked={online}
-                            onChange={(v) => useDriverStore.getState().setOnline(v)}
-                            disabled={busy}
-                            tone="driver"
-                            size="lg"
-                            label="Available"
-                            description={online ? "You'll receive nearby ride requests" : "Turn on to start receiving ride requests"}
-                        />
-                    </Card>
-
-                    <RideRequests online={online} />
-
-                    <div className="mt-5 flex flex-col gap-3">
-                        <Button variant="secondary" leftIcon={<LocateFixed size={18} />} onClick={handleLocateMe} loading={locating} loadingText="Locating…">
-                            Locate me
-                        </Button>
-
-                        <div className="rounded-xl bg-surface-2 p-3">
-                            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">{manualLocation ? "Pinned location" : "Current location"}</p>
-                            <p className="mt-1 text-sm font-medium leading-snug">
-                                {addressResolving ? "Locating…" : addressLabel ?? (location ? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}` : "Unknown")}
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={fades.normal} className="flex min-h-0 flex-1 flex-col">
+                    <PanelHeader>
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-400 text-ink" aria-hidden>
+                            <MapPinned size={18} />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                            <p className="text-[15px] font-semibold leading-snug">Set your location</p>
+                            <p className="text-[13px] leading-snug text-muted">Drag the map until the pin sits where you are.</p>
+                        </div>
+                        <IconButton label="Cancel" variant="ghost" size="icon" onClick={() => setPinDrop(false)}>
+                            <X size={18} />
+                        </IconButton>
+                    </PanelHeader>
+                    <PanelBody>
+                        <div className="rounded-card bg-surface-2 p-4">
+                            <p className="text-[11px] font-medium leading-none text-muted">Pin location</p>
+                            <p className="mt-1.5 flex items-center gap-2 text-[17px] font-semibold leading-snug" aria-live="polite">
+                                {resolvingPin && <Spinner className="h-4 w-4 shrink-0 text-muted" />}
+                                <span>{pinLabel || "Locating…"}</span>
                             </p>
                         </div>
-
-                        <button
-                            type="button"
-                            onClick={startPinDrop}
-                            className="flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-semibold text-muted transition hover:bg-surface-2 hover:text-ink"
-                        >
-                            <MapPinned size={14} /> Set my location on the map
-                        </button>
-                    </div>
-                </PanelBody>
+                    </PanelBody>
+                    <PanelFooter>
+                        <Button size="lg" variant="primary" arrow onClick={confirmPin} disabled={resolvingPin || confirmingPin} loading={confirmingPin} loadingText="Saving location…">
+                            Confirm location
+                        </Button>
+                    </PanelFooter>
+                </motion.div>
+            ) : (
+                <>
+                    {/* Re-keyed per trip stage so each stage opens scrolled to its headline. */}
+                    <PanelBody key={activeOffer ? `trip-${activeOffer.status}` : "idle"}>
+                        <motion.div variants={listVariants} initial="hidden" animate="show" className="flex flex-col gap-4">
+                            {activeOffer && (
+                                <motion.div variants={item}>
+                                    <ActiveTripCard offer={activeOffer} error={error} />
+                                </motion.div>
+                            )}
+                            <motion.div variants={item}>
+                                <GoOnlineCard compact={compactOnline} online={online} busy={busy} name={firstName} vehicle={vehicle} onChange={setOnline} />
+                            </motion.div>
+                            {!activeOffer && online && (
+                                <motion.div variants={item}>
+                                    <RideRequests offers={openOffers} now={now} near={addressLabel} onDismiss={dismissOffer} acceptInFooter={mobile} />
+                                </motion.div>
+                            )}
+                            <motion.div variants={item}>
+                                <LocationCard pinned={manualLocation} address={addressText} resolving={addressResolving} locating={locating} onLocate={handleLocateMe} onPin={startPinDrop} />
+                            </motion.div>
+                        </motion.div>
+                    </PanelBody>
+                    {activeOffer ? (
+                        <PanelFooter>
+                            <ActiveTripAction
+                                offer={activeOffer}
+                                busy={busy}
+                                onAdvance={(action) => useDriverStore.getState().advanceLiveTrip(action)}
+                                onDone={() => useDriverStore.getState().dismissAcceptedOffer()}
+                            />
+                        </PanelFooter>
+                    ) : (
+                        footerOffer && (
+                            <PanelFooter>
+                                <Button
+                                    size="lg"
+                                    variant="primary"
+                                    arrow
+                                    arrowIcon={<Check strokeWidth={3} />}
+                                    loading={acceptingTripId === footerOffer.tripId}
+                                    loadingText="Accepting…"
+                                    disabled={acceptingTripId !== null}
+                                    onClick={() => useDriverStore.getState().acceptLiveOffer(footerOffer.tripId)}
+                                >
+                                    Accept ride{money(footerOffer.fare) ? ` · ${money(footerOffer.fare)}` : ""}
+                                </Button>
+                            </PanelFooter>
+                        )
+                    )}
+                </>
             )}
         </MapSplit>
     );
