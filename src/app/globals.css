@@ -1,67 +1,80 @@
 @import "tailwindcss";
 
 /* ------------------------------------------------------------------ */
-/*  GoRide design tokens                                               */
-/*  Theme lineage: QuickRide (Poppins · brand green · black CTAs ·     */
-/*  zinc surfaces · rounded-lg/xl · bottom sheets)                     */
+/*  GoRide design tokens: "Taxi Yellow"                                 */
+/*  World: Waygo reference. Warm taxi-yellow fills, charcoal ink and    */
+/*  dark panels, white cards on a warm-grey ground, pill buttons with a */
+/*  round arrow chip, generous 20-28px radii, soft long shadows.        */
+/*  Yellow is a FILL colour: never set small text in brand-400 on white */
+/*  (use brand-700/800 for text-on-light, ink on yellow fills).         */
+/*  Token names are kept from the previous theme so every class keeps   */
+/*  compiling; brand-* is now yellow, navy-* is now charcoal.           */
 /* ------------------------------------------------------------------ */
 @theme {
   /* Typography */
   --font-sans: var(--font-poppins), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Display serif: landing hero + rare editorial moments only */
+  --font-display: var(--font-instrument), "Instrument Serif", ui-serif, Georgia, serif;
 
-  /* Brand green scale (anchored on #52d56a from the logo) */
-  --color-brand-50: #eefbf0;
-  --color-brand-100: #d6f6dc;
-  --color-brand-200: #afecbb;
-  --color-brand-300: #7fe094;
-  --color-brand-400: #52d56a;
-  --color-brand-500: #2fc24c;
-  --color-brand-600: #22a03d;
-  --color-brand-700: #1d7e33;
-  --color-brand-800: #1b642c;
-  --color-brand-900: #175226;
-  --color-brand-950: #092e14;
+  /* Brand: taxi yellow (fill = 400) */
+  --color-brand-50: #fffbeb;
+  --color-brand-100: #fff3c4;
+  --color-brand-200: #ffe68a;
+  --color-brand-300: #ffd84d;
+  --color-brand-400: #ffc21a;
+  --color-brand-500: #f5b000;
+  --color-brand-600: #d69500;
+  --color-brand-700: #a26f00;
+  --color-brand-800: #7a5300;
+  --color-brand-900: #4f3600;
+  --color-brand-950: #2b1d00;
 
-  /* Driver accent (the "captain" orange from the theme) */
+  /* Driver accent: same family, pushed warmer (amber) so the captain's
+     surfaces read as GoRide but distinct from the rider's */
   --color-driver-50: #fff7ed;
   --color-driver-100: #ffedd5;
   --color-driver-200: #fed7aa;
   --color-driver-300: #fdba74;
-  --color-driver-400: #fb923c;
-  --color-driver-500: #f97316;
-  --color-driver-600: #ea580c;
-  --color-driver-700: #c2410c;
+  --color-driver-400: #ffa41b;
+  --color-driver-500: #f28c00;
+  --color-driver-600: #d97100;
+  --color-driver-700: #b45309;
 
-  /* Admin navy (from the pitch deck) */
-  --color-navy-700: #1e3352;
-  --color-navy-800: #142740;
-  --color-navy-900: #0f1c30;
-  --color-navy-950: #0b1220;
+  /* Charcoal (was "navy"): dark panels, sidebars, the sign-in card */
+  --color-navy-700: #2a2a2c;
+  --color-navy-800: #1f1f21;
+  --color-navy-900: #161617;
+  --color-navy-950: #0e0e0f;
 
-  /* Ink & surfaces */
-  --color-ink: #0a0a0a;
-  --color-ink-2: #27272a;
-  --color-muted: #71717a;
+  /* Ink & surfaces (warm neutrals) */
+  --color-ink: #111111;
+  --color-ink-2: #2a2a2c;
+  --color-muted: #6e6e73;
   --color-surface: #ffffff;
-  --color-surface-2: #f4f4f5;
-  --color-surface-3: #e4e4e7;
+  --color-surface-2: #f5f5f3;
+  --color-surface-3: #e9e9e6;
+  --color-line: #ececea;
 
   /* Semantic */
-  --color-success: #22c55e;
+  --color-success: #16a34a;
   --color-warning: #f59e0b;
-  --color-danger: #dc2626;
+  --color-danger: #e5383b;
   --color-info: #2563eb;
 
   /* Radii */
-  --radius-sheet: 1.25rem;
+  --radius-sheet: 1.75rem;
+  --radius-card: 1.5rem;
+  --radius-field: 1rem;
 
-  /* Shadows */
-  --shadow-sheet: 0 -10px 40px -10px rgb(0 0 0 / 0.18);
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -12px rgb(0 0 0 / 0.12);
-  --shadow-float: 0 12px 32px -8px rgb(0 0 0 / 0.22);
+  /* Shadows: soft, long, warm */
+  --shadow-sheet: 0 -16px 48px -16px rgb(17 17 17 / 0.22);
+  --shadow-card: 0 1px 2px rgb(17 17 17 / 0.04), 0 12px 32px -16px rgb(17 17 17 / 0.14);
+  --shadow-float: 0 18px 40px -12px rgb(17 17 17 / 0.28);
+  --shadow-glow: 0 10px 30px -8px rgb(255 194 26 / 0.55);
 
   /* Motion */
   --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-glass: cubic-bezier(0.4, 0, 0.2, 1);
   --animate-radar: radar 2s var(--ease-spring) infinite;
   --animate-radar-delayed: radar 2s var(--ease-spring) 0.7s infinite;
   --animate-shimmer: shimmer 1.6s linear infinite;
@@ -71,6 +84,7 @@
   --animate-slide-up: slide-up 0.45s var(--ease-spring) both;
   --animate-fade-in: fade-in 0.35s ease-out both;
   --animate-scan: scan 2.2s linear infinite;
+  --animate-ride-bob: ride-bob 3s ease-in-out infinite;
 
   @keyframes radar {
     0% { transform: scale(0.35); opacity: 0.9; }
@@ -100,6 +114,11 @@
     0% { transform: translateX(-100%); }
     100% { transform: translateX(400%); }
   }
+  /* the hero's frame overlay "rides": a gentle road bob, scaled so edges never show */
+  @keyframes ride-bob {
+    0%, 100% { transform: translateY(0) scale(1.03); }
+    50% { transform: translateY(-6px) scale(1.03); }
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -112,23 +131,35 @@
   }
   body {
     min-height: 100%;
-    background: #f4f4f5;
+    background: var(--color-surface-2);
     color: var(--color-ink);
     font-family: var(--font-sans);
-    font-weight: 500; /* theme default: Poppins Medium */
-    font-feature-settings: "ss01", "cv11";
+    font-weight: 400;
     text-rendering: optimizeLegibility;
   }
   ::selection {
-    background-color: #bbf7d0;
-    color: #0a0a0a;
+    background-color: var(--color-brand-300);
+    color: var(--color-ink);
   }
-  /* theme hides scrollbars app-wide; keep that but preserve scrolling */
+  :focus-visible {
+    outline: 2.5px solid var(--color-ink);
+    outline-offset: 2px;
+  }
+  /* thin, warm-grey scrollbars from the palette (chip rows hide theirs via scroll-row) */
   * {
-    scrollbar-width: none;
+    scrollbar-width: thin;
+    scrollbar-color: #d6d6d2 transparent;
   }
   *::-webkit-scrollbar {
-    display: none;
+    width: 6px;
+    height: 6px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: #d6d6d2;
+    border-radius: 9999px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
   }
   input,
   select,
@@ -149,6 +180,16 @@
   [role="button"]:not([aria-disabled="true"]) {
     cursor: pointer;
   }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -165,7 +206,7 @@
     height: 6px;
   }
   &::-webkit-scrollbar-thumb {
-    background: #d4d4d8;
+    background: #d6d6d2;
     border-radius: 9999px;
   }
 }
@@ -173,15 +214,188 @@
   text-wrap: balance;
 }
 @utility skeleton {
-  background: linear-gradient(90deg, #f4f4f5 25%, #e4e4e7 37%, #f4f4f5 63%);
+  background: linear-gradient(90deg, #f5f5f3 25%, #e9e9e6 37%, #f5f5f3 63%);
   background-size: 200% 100%;
   animation: var(--animate-shimmer);
 }
 @utility map-grid {
-  background-color: #f6f7f8;
+  background-color: #f3f2ee;
   background-image:
-    linear-gradient(rgba(10, 10, 10, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(10, 10, 10, 0.045) 1px, transparent 1px);
+    linear-gradient(rgba(17, 17, 17, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(17, 17, 17, 0.045) 1px, transparent 1px);
   background-size: 28px 28px;
 }
 
+/* Liquid glass (from the Lumora spec): near-clear fill, 4px blur, a
+   1.4px gradient hairline drawn by a masked ::before. Use on dark or
+   photographic grounds only. */
+@utility liquid-glass {
+  background: rgba(255, 255, 255, 0.01);
+  background-blend-mode: luminosity;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: none;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.4px;
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.45) 0%,
+      rgba(255, 255, 255, 0.15) 20%,
+      rgba(255, 255, 255, 0) 40%,
+      rgba(255, 255, 255, 0) 60%,
+      rgba(255, 255, 255, 0.15) 80%,
+      rgba(255, 255, 255, 0.45) 100%
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Foundation v2 (appended): shell + map surfaces, loader motion       */
+/*  Tokens above are untouched; everything below only adds.            */
+/* ------------------------------------------------------------------ */
+@theme {
+  /* Floating mobile tab bar: height + gutter, consumed via --tabbar-h */
+  --spacing-tabbar: 6.75rem;
+  /* Rail / pressed-surface shadows */
+  --shadow-rail: inset -1px 0 0 rgb(255 255 255 / 0.06);
+  --shadow-press: inset 0 2px 6px rgb(17 17 17 / 0.14);
+  --shadow-chip: 0 6px 16px -8px rgb(17 17 17 / 0.45);
+  /* Loader + marker motion */
+  --animate-pin-pulse: pin-pulse 2.2s var(--ease-spring) infinite;
+  --animate-pin-bob: pin-bob 1.8s ease-in-out infinite;
+  --animate-tab-pop: tab-pop 0.32s var(--ease-spring) both;
+
+  @keyframes pin-pulse {
+    0% { transform: scale(0.35); opacity: 0.6; }
+    100% { transform: scale(1); opacity: 0; }
+  }
+  @keyframes pin-bob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
+  @keyframes tab-pop {
+    from { transform: scale(0.85); opacity: 0.6; }
+    to { transform: scale(1); opacity: 1; }
+  }
+}
+
+/* Marker keyframes live outside @theme so Leaflet's inline-style divIcons
+   can reference them unconditionally. */
+@keyframes gr-radar {
+  0% { transform: scale(0.35); opacity: 0.85; }
+  100% { transform: scale(1); opacity: 0; }
+}
+@keyframes gr-halo {
+  0%, 100% { transform: scale(1); opacity: 0.35; }
+  50% { transform: scale(1.75); opacity: 0; }
+}
+@keyframes gr-pin-settle {
+  0% { transform: translateY(-10px); }
+  60% { transform: translateY(2px); }
+  100% { transform: translateY(0); }
+}
+
+/* Content that must clear the floating tab bar on phones. AppShell sets
+   --tabbar-h (0 on md+), so this is safe to use anywhere. */
+@utility pb-tabbar {
+  padding-bottom: calc(var(--tabbar-h, 0px) + env(safe-area-inset-bottom));
+}
+@utility mb-tabbar {
+  margin-bottom: calc(var(--tabbar-h, 0px) + env(safe-area-inset-bottom));
+}
+/* Horizontal chip rows: scroll without a visible bar, snap gently. */
+@utility scroll-row {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+  & > * { scroll-snap-align: start; flex: 0 0 auto; }
+}
+
+/* ---- Leaflet chrome, themed from the palette ----------------------- */
+.leaflet-container {
+  font-family: var(--font-sans);
+  background: #e9e9e6;
+}
+.leaflet-container .leaflet-control-zoom {
+  margin: 1rem;
+  border: 0;
+  border-radius: 1rem;
+  overflow: hidden;
+  box-shadow: var(--shadow-float);
+}
+.leaflet-container .leaflet-control-zoom a,
+.leaflet-container .leaflet-control-zoom a:first-child,
+.leaflet-container .leaflet-control-zoom a:last-child {
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+  color: var(--color-ink);
+  font: 600 20px/2.5rem var(--font-sans);
+  transition: background-color 150ms ease-out;
+}
+.leaflet-container .leaflet-control-zoom a + a {
+  border-top: 1px solid var(--color-line);
+}
+.leaflet-container .leaflet-control-zoom a:hover {
+  background: var(--color-surface-2);
+}
+.leaflet-container .leaflet-control-zoom a.leaflet-disabled {
+  color: var(--color-muted);
+  background: #fff;
+  opacity: 0.55;
+}
+.leaflet-container .leaflet-control-attribution {
+  margin: 0 0.75rem 0.5rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 9999px;
+  background: rgb(255 255 255 / 0.86);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  font: 500 10px/1.5 var(--font-sans);
+  color: var(--color-muted);
+  box-shadow: 0 1px 2px rgb(17 17 17 / 0.06);
+}
+.leaflet-container .leaflet-control-attribution a {
+  color: var(--color-ink);
+  text-decoration: none;
+}
+.leaflet-container .leaflet-control-attribution .leaflet-attribution-flag {
+  display: none !important;
+}
+@media (max-width: 767px) {
+  .leaflet-container .leaflet-control-zoom { display: none; }
+  .leaflet-container .leaflet-control-attribution {
+    margin-bottom: calc(var(--map-attr-offset, 0px) + 0.5rem);
+  }
+}
+/* Driver pucks glide between GPS fixes; Leaflet's own zoom/drag timing wins
+   while the map itself is moving. */
+.leaflet-marker-icon.goride-smooth {
+  transition: transform 1s linear;
+}
+.leaflet-zoom-anim .leaflet-marker-icon.goride-smooth {
+  transition: transform 0.25s cubic-bezier(0, 0, 0.25, 1);
+}
+.leaflet-dragging .leaflet-marker-icon.goride-smooth {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .leaflet-marker-icon.goride-smooth { transition: none; }
+}
