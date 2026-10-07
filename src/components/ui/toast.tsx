@@ -2,9 +2,10 @@
 
 import * as React from "react";
 import { create } from "zustand";
-import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, Bell, CheckCircle2, Info, X, XCircle } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AlertTriangle, Bell, Check, Info, X, XCircle } from "lucide-react";
 import { cn, uid } from "@/lib/utils";
+import { fades, springs } from "./motion";
 
 export type ToastTone = "success" | "error" | "info" | "warning" | "notification";
 
@@ -43,34 +44,37 @@ export const toast = {
   dismiss: (id: string) => useToastStore.getState().dismiss(id),
 };
 
-const icon: Record<ToastTone, React.ReactNode> = {
-  success: <CheckCircle2 size={18} className="text-brand-500" />,
-  error: <XCircle size={18} className="text-danger" />,
-  info: <Info size={18} className="text-info" />,
-  warning: <AlertTriangle size={18} className="text-warning" />,
-  notification: <Bell size={18} className="text-ink" />,
+/** Icon chip: yellow for good news, red for errors, quiet for info. */
+const chip: Record<ToastTone, { surface: string; icon: React.ReactNode }> = {
+  success: { surface: "bg-brand-400 text-ink", icon: <Check size={16} strokeWidth={3} /> },
+  notification: { surface: "bg-brand-400 text-ink", icon: <Bell size={15} strokeWidth={2.5} /> },
+  info: { surface: "bg-white/12 text-white", icon: <Info size={16} strokeWidth={2.5} /> },
+  warning: { surface: "bg-warning text-ink", icon: <AlertTriangle size={15} strokeWidth={2.5} /> },
+  error: { surface: "bg-danger text-white", icon: <XCircle size={16} strokeWidth={2.5} /> },
 };
 
 function ToastItem({ t }: { t: Toast }) {
   const dismiss = useToastStore((s) => s.dismiss);
+  const reduce = useReducedMotion();
   React.useEffect(() => {
     const id = setTimeout(() => dismiss(t.id), t.durationMs);
     return () => clearTimeout(id);
   }, [t, dismiss]);
+  const c = chip[t.tone];
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: -16, scale: 0.96 }}
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y: -14, scale: 0.96 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -10, scale: 0.96 }}
-      transition={{ type: "spring", stiffness: 420, damping: 32 }}
-      className={cn("pointer-events-auto flex w-full items-start gap-3 rounded-xl border border-black/5 bg-white/95 p-3 pr-2 shadow-float backdrop-blur")}
-      role="status"
+      exit={{ opacity: 0, y: -8, scale: 0.97, transition: fades.exit }}
+      transition={reduce ? fades.fast : springs.snappy}
+      className={cn("pointer-events-auto flex w-full items-center gap-3 bg-navy-900 py-2 pl-2 pr-2 text-white shadow-float", t.description || t.action ? "rounded-[22px]" : "rounded-full")}
+      role={t.tone === "error" ? "alert" : "status"}
     >
-      <span className="mt-0.5 shrink-0">{icon[t.tone]}</span>
-      <div className="min-w-0 flex-1">
+      <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center self-start rounded-full", c.surface)}>{c.icon}</span>
+      <div className="min-w-0 flex-1 py-1">
         <p className="text-[13px] font-semibold leading-snug">{t.title}</p>
-        {t.description && <p className="mt-0.5 text-xs font-normal leading-snug text-zinc-600">{t.description}</p>}
+        {t.description && <p className="mt-0.5 text-xs leading-snug text-white/70 text-pretty">{t.description}</p>}
         {t.action && (
           <button
             type="button"
@@ -78,25 +82,26 @@ function ToastItem({ t }: { t: Toast }) {
               t.action?.onClick();
               dismiss(t.id);
             }}
-            className="mt-1.5 text-xs font-semibold text-brand-600 hover:underline"
+            className="mt-1.5 text-xs font-semibold text-brand-300 hover:text-brand-200"
           >
             {t.action.label}
           </button>
         )}
       </div>
-      <button type="button" onClick={() => dismiss(t.id)} aria-label="Dismiss" className="rounded-md p-1 text-zinc-400 hover:bg-surface-2 hover:text-ink">
-        <X size={14} />
+      <button type="button" onClick={() => dismiss(t.id)} aria-label="Dismiss" className="flex h-8 w-8 shrink-0 items-center justify-center self-start rounded-full text-white/55 transition-colors hover:bg-white/10 hover:text-white">
+        <X size={14} strokeWidth={2.5} />
       </button>
     </motion.div>
   );
 }
 
-/** Mount once per shell. `inset` = inside a phone frame (absolute) or viewport (fixed). */
+/** Mount once per shell. `absolute` inside a region, `fixed` to the viewport. */
 export function Toaster({ position = "absolute" }: { position?: "absolute" | "fixed" }) {
   const toasts = useToastStore((s) => s.toasts);
   return (
-    // `fixed` sits just below the 56px shell header so it never covers the title bar.
-    <div className={cn("pointer-events-none z-[60] flex flex-col gap-2 p-3", position, position === "fixed" ? "right-0 top-14 w-full max-w-sm" : "inset-x-0 top-0")}>
+    // `fixed` sits below the shell header (top-16) and hugs the right edge on
+    // wider screens; on phones it spans the width.
+    <div className={cn("pointer-events-none z-[60] flex flex-col gap-2 p-3", position, position === "fixed" ? "inset-x-0 top-14 sm:inset-x-auto sm:right-2 sm:top-16 sm:w-full sm:max-w-sm" : "inset-x-0 top-0")}>
       <AnimatePresence initial={false}>
         {toasts.map((t) => (
           <ToastItem key={t.id} t={t} />
