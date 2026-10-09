@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { requestFirebaseToken, setupMessageListener } from "@/lib/firebase";
+import { firebaseConfigured, requestFirebaseToken, setupMessageListener } from "@/lib/firebase";
 import { registerDeviceToken } from "@/lib/api/notification";
 import { useCurrentUser } from "@/components/layout/role-guard";
 import { toast } from "@/components/ui/toast";
@@ -10,7 +10,7 @@ export function FirebaseNotifications() {
   const user = useCurrentUser();
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !firebaseConfigured) return;
 
     let isSubscribed = true;
 
