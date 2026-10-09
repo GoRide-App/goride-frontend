@@ -18,7 +18,7 @@ import { ACTIVE_OFFER_STATUSES, ActiveTripAction, ActiveTripCard } from "@/compo
 import { GoOnlineCard } from "@/components/driver/go-online-card";
 import { LocationCard } from "@/components/driver/location-card";
 import { ListeningCard, OfferCard, money } from "@/components/driver/offer-card";
-import { useDriverStore } from "@/store/driver-store";
+import { liveTripLocked, useDriverStore } from "@/store/driver-store";
 import { reverseGeocode } from "@/lib/geo/providers";
 
 export default function DriverHomePage() {
@@ -96,6 +96,11 @@ function DriverMap({ driverId, name }: { driverId: string; name: string }) {
     const acceptedOffer = useDriverStore((s) => s.acceptedOffer);
     const liveOffers = useDriverStore((s) => s.liveOffers);
     const acceptingTripId = useDriverStore((s) => s.acceptingTripId);
+    const livePayment = useDriverStore((s) => s.livePayment);
+    const livePaymentError = useDriverStore((s) => s.livePaymentError);
+    const confirmingCash = useDriverStore((s) => s.confirmingCash);
+    // On a live trip, or finished but unpaid: the toggle and new offers wait (see liveTripLocked).
+    const locked = liveTripLocked({ acceptedOffer, livePayment });
     const mobile = useIsMobile();
     const reduce = useReducedMotion();
     const item = reduce ? fadeOnly : itemVariants;
@@ -133,9 +138,10 @@ function DriverMap({ driverId, name }: { driverId: string; name: string }) {
     const [addressLabel, setAddressLabel] = React.useState<string | null>(null);
     const [addressResolving, setAddressResolving] = React.useState(false);
 
+    const awaitingPayment = locked && activeOffer?.status === "Completed";
     useSetShellHeader({
-        title: online ? "You're online" : "You're offline",
-        description: online ? "Nearby riders can be matched to you" : `Good to see you, ${firstName}`,
+        title: awaitingPayment ? "Waiting for payment" : locked ? "You're on a trip" : online ? "You're online" : "You're offline",
+        description: awaitingPayment ? "The trip closes once the rider has paid" : locked ? "New requests pause until this trip is done" : online ? "Nearby riders can be matched to you" : `Good to see you, ${firstName}`,
     });
 
     React.useEffect(() => {
@@ -276,11 +282,19 @@ function DriverMap({ driverId, name }: { driverId: string; name: string }) {
                         <motion.div variants={listVariants} initial="hidden" animate="show" className="flex flex-col gap-4">
                             {activeOffer && (
                                 <motion.div variants={item}>
-                                    <ActiveTripCard offer={activeOffer} error={error} />
+                                    <ActiveTripCard offer={activeOffer} error={error} payment={livePayment} paymentError={livePaymentError} />
                                 </motion.div>
                             )}
                             <motion.div variants={item}>
-                                <GoOnlineCard compact={compactOnline} online={online} busy={busy} name={firstName} vehicle={vehicle} onChange={setOnline} />
+                                <GoOnlineCard
+                                    compact={compactOnline}
+                                    online={online}
+                                    busy={busy && !activeOffer}
+                                    name={firstName}
+                                    vehicle={vehicle}
+                                    lockedReason={locked ? (awaitingPayment ? "You can go offline after this trip is paid." : "You can go offline once this trip is finished and paid.") : null}
+                                    onChange={setOnline}
+                                />
                             </motion.div>
                             {!activeOffer && online && (
                                 <motion.div variants={item}>
@@ -297,7 +311,11 @@ function DriverMap({ driverId, name }: { driverId: string; name: string }) {
                             <ActiveTripAction
                                 offer={activeOffer}
                                 busy={busy}
+                                confirming={acceptingTripId === activeOffer.tripId}
+                                payment={livePayment}
+                                confirmingCash={confirmingCash}
                                 onAdvance={(action) => useDriverStore.getState().advanceLiveTrip(action)}
+                                onConfirmCash={() => useDriverStore.getState().confirmLiveCash()}
                                 onDone={() => useDriverStore.getState().dismissAcceptedOffer()}
                             />
                         </PanelFooter>
