@@ -412,6 +412,19 @@ export interface PayResult {
   confirmation: PaymentConfirmation;
 }
 
+/** A trip payment goride-payment has settled, as the rider app shows it. */
+export interface PaidOutcome {
+  tripId: string;
+  method: PaymentMethod;
+  amount: number;
+  currency: string;
+  cardBrand: string | null;
+  cardLast4: string | null;
+  /** PayHere or demo provider reference; null for cash. */
+  reference: string | null;
+  paidAt: string | null;
+}
+
 export type ReceiptStatus = "Pending" | "Sending" | "Retry" | "Sent" | "Failed" | "NoEmail";
 
 /** The emailed receipt for a paid trip. `recipient` is masked, e.g. s***a@gmail.com. */

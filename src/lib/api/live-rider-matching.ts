@@ -29,6 +29,14 @@ export interface LiveMatchingDeps {
   resolveDriver: (driverId: string) => Promise<{ name?: string; location?: LatLng }>;
 }
 
+/**
+ * True when the real matcher found this trip's driver (as opposed to a simulated one). Its
+ * completion — and so its payment — then comes from the trip service, not the browser.
+ */
+export function isLiveTrip(tripId: string) {
+  return !!world().get().sim[tripId]?.live;
+}
+
 const polling = new Set<string>();
 
 /**

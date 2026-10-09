@@ -3,7 +3,7 @@
  * makes (Luhn, a future expiry, a 3-digit CVC), and display formatting for saved cards.
  * Pre-validating here only saves a round trip; the service still has the final say.
  */
-import type { CardBrand } from "@/types";
+import type { CardBrand, SavedCard } from "@/types";
 
 export function digitsOnly(value: string) {
   return value.replace(/\D/g, "");
@@ -119,4 +119,15 @@ export function formatCardExpiry(month: number, year: number) {
 /** "Visa •••• 4242" */
 export function cardLabel(brand: string | null | undefined, last4: string | null | undefined) {
   return last4 ? `${brandLabel(brand)} •••• ${last4}` : brandLabel(brand);
+}
+
+/** Default first, then newest. */
+export function sortCards(cards: SavedCard[]) {
+  return [...cards].sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || b.createdAt.localeCompare(a.createdAt));
+}
+
+/** Merges a saved or updated card into the list, keeping a single default. */
+export function withCard(cards: SavedCard[], card: SavedCard) {
+  const rest = cards.filter((c) => c.cardId !== card.cardId).map((c) => (card.isDefault ? { ...c, isDefault: false } : c));
+  return sortCards([...rest, card]);
 }

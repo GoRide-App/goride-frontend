@@ -154,7 +154,11 @@ export interface GoRideApi {
   payments: {
     get(tripId: string): Promise<Payment | null>;
     selectMethod(tripId: string, method: PaymentMethod): Promise<Payment>;
-    cardAttempt(tripId: string, opts?: { forceFail?: boolean }): Promise<Payment>;
+    /**
+     * Records a payment the real goride-payment service settled (card, or cash the driver
+     * confirmed) on this trip, so the trip moves to PAID. Charging itself is never done here.
+     */
+    recordPayment(tripId: string, outcome: { method: PaymentMethod; amount?: number | null; reference?: string | null; paidAt?: string | null }): Promise<Payment | null>;
     confirmCash(tripId: string): Promise<Payment>;
     dispute(tripId: string, raisedBy: string, reason: string): Promise<PaymentDispute>;
     listDisputes(): Promise<PaymentDispute[]>;

@@ -6,23 +6,17 @@ import { CreditCard, Lock, Plus, RefreshCw } from "lucide-react";
 import type { SavedCard } from "@/types";
 import { isPaymentError, paymentService } from "@/lib/api/payments-live";
 import { errorMessage } from "@/lib/api";
-import { cardLabel } from "@/lib/card-input";
+import { cardLabel, sortCards, withCard } from "@/lib/card-input";
 import { Button } from "@/components/ui/button";
 import { fades } from "@/components/ui/motion";
 import { Card, EmptyState, Skeleton } from "@/components/ui/primitives";
 import { toast } from "@/components/ui/toast";
 import { ProfileSectionTitle } from "@/components/profile/profile-screen";
-import { SavedCardRow, sortCards } from "./card-bits";
+import { SavedCardRow } from "./card-bits";
 import { AddCardForm } from "./card-form";
 
 /** The payment service keeps at most this many cards per rider (409 CARD_LIMIT_REACHED). */
 const MAX_CARDS = 5;
-
-/** Merges a saved/updated card into the list, keeping a single default. */
-function withCard(cards: SavedCard[], card: SavedCard) {
-  const rest = cards.filter((c) => c.cardId !== card.cardId).map((c) => (card.isDefault ? { ...c, isDefault: false } : c));
-  return sortCards([...rest, card]);
-}
 
 /**
  * Rider profile → Payment methods: the demo cards saved with goride-payment. The default card

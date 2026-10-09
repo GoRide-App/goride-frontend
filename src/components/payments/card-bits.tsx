@@ -42,11 +42,6 @@ function cardMeta(card: SavedCard) {
   return `Expires ${formatCardExpiry(card.expMonth, card.expYear)}${card.holderName ? ` · ${card.holderName}` : ""}`;
 }
 
-/** Default first, then newest. */
-export function sortCards(cards: SavedCard[]) {
-  return [...cards].sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || b.createdAt.localeCompare(a.createdAt));
-}
-
 /* ------------------------------------------------------------------ */
 /* Picker: which saved card pays (checkout)                             */
 /* ------------------------------------------------------------------ */

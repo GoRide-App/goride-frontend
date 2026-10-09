@@ -9,6 +9,7 @@
  */
 import type {
   NewCardPayload,
+  PaidOutcome,
   PaymentConfirmationView,
   PaymentStatusView,
   PayResult,
@@ -91,6 +92,20 @@ async function call<T>(path: string, init: { method?: "GET" | "POST" | "DELETE";
 
 const trip = (tripId: string) => `/${encodeURIComponent(tripId)}`;
 
+/** A Paid status as the app shows it (the provider reference comes from the confirmation). */
+export function paidOutcomeFromStatus(st: PaymentStatusView): PaidOutcome {
+  return {
+    tripId: st.tripId,
+    method: st.method ?? "Card",
+    amount: st.amount,
+    currency: st.currency,
+    cardBrand: st.cardBrand,
+    cardLast4: st.cardLast4,
+    reference: null,
+    paidAt: st.paidAt,
+  };
+}
+
 export const paymentService = {
   cards: {
     async list(): Promise<SavedCard[]> {
@@ -117,8 +132,8 @@ export const paymentService = {
    * Local demo only: creates the payable record for a SIMULATED ride (a demo driver the trip
    * service never saw). Idempotent per trip; 404 when the service has demo trips switched off.
    */
-  completeDemoTrip(tripId: string, finalFare: number): Promise<PaymentStatusView | null> {
-    return call("/demo-completions", { method: "POST", body: { tripId, finalFare: Math.round(finalFare * 100) / 100 } });
+  async completeDemoTrip(tripId: string, finalFare: number): Promise<void> {
+    await call<unknown>("/demo-completions", { method: "POST", body: { tripId, finalFare: Math.round(finalFare * 100) / 100 } });
   },
 
   /** JSON null until the completed trip has reached the payment service. Rider and driver. */

@@ -6,15 +6,21 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { AlertTriangle, ArrowLeft, Check, CreditCard, Flag, Info, LocateFixed, MapPinned, Plus, RefreshCw, ShieldCheck, Wallet, X } from "lucide-react";
 import type { FareEstimate, Place, Trip, VehicleType } from "@/types";
 import { CANCEL_REASONS_RIDER, COMPLAINT_CATEGORIES, MATCH_ROUNDS, VEHICLE_IMAGES } from "@/lib/constants";
-import { IS_MOCK } from "@/lib/api";
+import { isLiveRide } from "@/lib/api";
+import { cardLabel } from "@/lib/card-input";
 import { cn, formatKm, formatLKR, formatMinutes } from "@/lib/utils";
 import { Button, IconButton } from "@/components/ui/button";
-import { Textarea, Toggle } from "@/components/ui/field";
+import { Textarea } from "@/components/ui/field";
 import { easeOut, fades, listVariants, springs } from "@/components/ui/motion";
-import { Badge, Chip, RatingStars, RouteRail } from "@/components/ui/primitives";
+import { Badge, Chip, RatingStars, RouteRail, Skeleton } from "@/components/ui/primitives";
 import { SheetHeader } from "@/components/ui/sheet";
 import { Spinner } from "@/components/ui/spinner";
 import { PanelBody, PanelFooter, PanelHeader } from "@/components/layout/map-split";
+import { SavedCardPicker } from "@/components/payments/card-bits";
+import { AddCardForm } from "@/components/payments/card-form";
+import { PaymentSummaryCard, formatPaidAmount, paidWithLabel, usePaidSummary } from "@/components/payments/payment-summary";
+import { ReceiptStatus } from "@/components/payments/receipt-status";
+import { type CheckoutStage, useCheckoutStore } from "@/store/checkout-store";
 import { RECENT_PLACES, SearchInput, SuggestionList, usePlaceSearch } from "./location-search";
 import { DriverCard, EtaTile, FareBreakdownList, FareReceipt, FareRow, InlineAlert, StatusHeadline, TripMeta, TripProgress, TripRoute, VehicleOption, isVehicleAvailable, useListItemVariants, vehicleDisplayName } from "./ride-bits";
 
@@ -653,118 +659,250 @@ export function InProgressSheet({ trip, etaMin, remainingKm, onCancelWithComplai
 }
 
 /* ------------------------------------------------------------------ */
-/* 7. Payment — FR-PAY-*, FR-CASH-*                                      */
+/* 7. Payment — FR-PAY-*, FR-CASH-* (goride-payment, see checkout-store) */
 /* ------------------------------------------------------------------ */
 
-export function PaymentSheet({ trip, preference, busy, onSelectCash, onPayCard, cardResult }: { trip: Trip; preference: "Card" | "Cash"; busy: boolean; onSelectCash: () => void; onPayCard: (forceFail: boolean) => void; cardResult: { ok: boolean; message?: string; cardDisabled?: boolean } | null }) {
-  const p = trip.payment;
-  const [forceFail, setForceFail] = React.useState(false);
-  const [method, setMethod] = React.useState<"Card" | "Cash">(p?.cardDisabled ? "Cash" : (p?.method ?? preference));
-  const cashSelected = p?.method === "Cash" && p.status === "AwaitingCash";
-  const attemptsLeft = 2 - (p?.cardAttemptCount ?? 0);
-  const processing = busy && method === "Card" && !cashSelected;
-  const first = trip.driver?.name.split(" ")[0];
+function FinalisingFare() {
+  return (
+    <div className="mt-4 rounded-card bg-ink p-5 text-white" role="status" aria-live="polite">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/60">Final fare</p>
+      <div className="mt-3 flex items-center gap-3">
+        <Spinner className="h-5 w-5 text-brand-300" />
+        <p className="text-sm font-medium">Finalising your fare from the distance and time driven…</p>
+      </div>
+      <div className="mt-5 space-y-2.5 border-t border-dashed border-white/20 pt-4" aria-hidden>
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="flex justify-between gap-3">
+            <span className="h-3 w-24 rounded-full bg-white/10" />
+            <span className="h-3 w-14 rounded-full bg-white/10" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-  if (!p) {
-    return (
-      <PanelBody>
-        <StatusHeadline title="You've arrived" description={`${trip.pickup.name} → ${trip.destination.name}`} right={<Badge tone="success" size="md">Completed</Badge>} />
-        <div className="mt-4 rounded-card bg-ink p-5 text-white" role="status" aria-live="polite">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/60">Final fare</p>
-          <div className="mt-3 flex items-center gap-3">
-            <Spinner className="h-5 w-5 text-brand-300" />
-            <p className="text-sm font-medium">Finalising your fare from the distance and time driven…</p>
-          </div>
-          <div className="mt-5 space-y-2.5 border-t border-dashed border-white/20 pt-4" aria-hidden>
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="flex justify-between gap-3">
-                <span className="h-3 w-24 rounded-full bg-white/10" />
-                <span className="h-3 w-14 rounded-full bg-white/10" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </PanelBody>
+function PreparingPayment({ live }: { live: boolean }) {
+  return (
+    <div className="mt-4 flex items-start gap-3 rounded-card bg-surface-2 p-4 ring-1 ring-line" role="status" aria-live="polite">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-brand-700" aria-hidden>
+        <Spinner className="h-5 w-5" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[15px] font-semibold leading-snug">Preparing your payment…</p>
+        <p className="mt-0.5 text-[13px] leading-snug text-muted text-pretty">
+          {live ? "Your driver's trip is on its way to payments. This usually takes a few seconds." : "Getting your final fare ready to pay. This only takes a moment."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function CashWaiting({ amount, first, note }: { amount: number; first: string; note: string }) {
+  return (
+    <div className="mt-4 flex flex-col items-center rounded-card bg-brand-50 p-5 text-center ring-1 ring-brand-200">
+      <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-400 text-ink" aria-hidden>
+        <Wallet size={22} />
+      </span>
+      <p className="mt-3 text-[15px] font-semibold text-balance">
+        Pay <span className="tabular-nums">{formatPaidAmount(amount)}</span> in cash to {first}
+      </p>
+      <p className="mt-1 text-[13px] leading-snug text-muted text-pretty">{note}</p>
+      <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-brand-800" role="status" aria-live="polite">
+        <Spinner className="h-4 w-4" /> Waiting for driver confirmation…
+      </div>
+    </div>
+  );
+}
+
+export function PaymentSheet({ trip, preference, busy, onSelectMockCash }: { trip: Trip; preference: "Card" | "Cash"; busy: boolean; onSelectMockCash: () => void }) {
+  const p = trip.payment;
+  const finalFare = p?.finalFare ?? trip.finalFare ?? trip.estimatedFare ?? 0;
+  const co = useCheckoutStore();
+  const mine = co.tripId === trip.id;
+  const [method, setMethod] = React.useState<"Card" | "Cash">(p?.method ?? preference);
+  const [addingCard, setAddingCard] = React.useState(false);
+  const first = trip.driver?.name.split(" ")[0] ?? "your driver";
+
+  // Starts (or resumes) the checkout for this trip; polling stops while the sheet is away.
+  React.useEffect(() => {
+    useCheckoutStore.getState().begin({ tripId: trip.id, live: isLiveRide(trip.id), finalFare });
+    return () => useCheckoutStore.getState().pause();
+  }, [trip.id, finalFare]);
+
+  const stage: CheckoutStage = mine ? co.stage : "preparing";
+  const live = mine && co.live;
+  const amount = (mine ? co.status?.amount : undefined) ?? finalFare;
+  const cards = mine ? co.cards : null;
+  const processing = stage === "processing";
+  const inAppOff = mine && co.inAppUnavailable;
+  const cardOff = mine && (co.cardDisabled || co.inAppUnavailable);
+  const payMethod = cardOff ? "Cash" : method;
+  // Cash on a simulated ride stays in the mock world, which marks it paid itself.
+  const mockCashWaiting = !live && p?.method === "Cash" && p.status === "AwaitingCash";
+  const failed = stage === "prepare_failed" && !inAppOff;
+  const showForm = !cardOff && !!cards && (addingCard || cards.length === 0);
+  const shownCard = cards?.find((c) => c.cardId === co.selectedCardId) ?? cards?.find((c) => c.isDefault) ?? null;
+
+  let body: React.ReactNode;
+  if (mockCashWaiting) body = <CashWaiting amount={p.finalFare} first={first} note="Your driver confirms once they've received it." />;
+  else if (stage === "awaiting_cash") body = <CashWaiting amount={amount} first={first} note="Hand over the cash; your driver confirms it in their app." />;
+  else if (stage === "paid")
+    body = (
+      <p className="mt-4 flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-[13px] font-semibold text-emerald-700" role="status">
+        <Check size={16} strokeWidth={3} /> Payment confirmed
+      </p>
     );
-  }
+  else if (stage === "preparing") body = <PreparingPayment live={live} />;
+  else if (failed) body = <InlineAlert className="mt-4">{co.prepareError}</InlineAlert>;
+  else
+    body = (
+      <>
+        <FieldLabel className="mb-2 mt-6">Payment method</FieldLabel>
+        <div className="grid grid-cols-2 gap-2" role="group" aria-label="Payment method">
+          {(["Card", "Cash"] as const).map((m) => {
+            const disabled = (m === "Card" && cardOff) || processing || co.cashBusy;
+            const active = payMethod === m;
+            const description =
+              m === "Cash"
+                ? "Pay your driver directly"
+                : cardOff
+                  ? inAppOff
+                    ? "Not available right now"
+                    : "Disabled for this trip"
+                  : !cards
+                    ? "Loading your cards…"
+                    : shownCard
+                      ? cardLabel(shownCard.brand, shownCard.last4)
+                      : "Add a card to pay";
+            return (
+              <button
+                key={m}
+                type="button"
+                disabled={disabled}
+                aria-pressed={active}
+                onClick={() => setMethod(m)}
+                className={cn(
+                  "flex min-h-[96px] flex-col items-start gap-2 rounded-card p-3.5 text-left ring-1 transition-[background-color,box-shadow] duration-200 ease-(--ease-spring)",
+                  active ? "bg-brand-50 ring-2 ring-brand-400" : "bg-white ring-line hover:bg-surface-2",
+                  disabled && "cursor-not-allowed",
+                  m === "Card" && cardOff && "opacity-50",
+                )}
+              >
+                <span className="flex w-full items-center justify-between">
+                  <span className={cn("flex h-9 w-9 items-center justify-center rounded-xl", active ? "bg-brand-400 text-ink" : "bg-surface-2 text-ink")}>{m === "Card" ? <CreditCard size={18} /> : <Wallet size={18} />}</span>
+                  {active && <Check size={18} strokeWidth={3} className="text-ink" />}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold">{m}</span>
+                  <span className="block truncate text-[11px] leading-snug text-muted tabular-nums">{description}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {inAppOff && co.prepareError && (
+          <InlineAlert tone="warning" className="mt-3">
+            {co.prepareError}
+          </InlineAlert>
+        )}
+        {co.cardDisabled && co.payError && <InlineAlert className="mt-3">{co.payError.title}</InlineAlert>}
+
+        {payMethod === "Card" && (
+          <div className="mt-5">
+            {cards && cards.length > 0 && !showForm && (
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <FieldLabel>Your cards</FieldLabel>
+                {cards.length < 5 && (
+                  <button
+                    type="button"
+                    onClick={() => setAddingCard(true)}
+                    disabled={processing}
+                    className="inline-flex min-h-8 items-center gap-1 text-[13px] font-semibold text-brand-800 underline-offset-4 hover:underline disabled:opacity-50"
+                  >
+                    <Plus size={14} strokeWidth={2.5} /> Add a card
+                  </button>
+                )}
+              </div>
+            )}
+            {co.cardsError ? (
+              <div className="flex items-center justify-between gap-3 rounded-2xl bg-red-50 px-3.5 py-3" role="alert">
+                <p className="min-w-0 text-[13px] font-medium leading-snug text-danger text-pretty">{co.cardsError}</p>
+                <Button size="sm" variant="white" full={false} leftIcon={<RefreshCw size={14} />} onClick={() => co.loadCards()}>
+                  Retry
+                </Button>
+              </div>
+            ) : !cards ? (
+              <div className="flex flex-col gap-2" aria-busy="true">
+                <Skeleton className="h-16 rounded-2xl" />
+                <Skeleton className="h-16 rounded-2xl" />
+              </div>
+            ) : showForm ? (
+              <AddCardForm
+                className="rounded-card bg-white p-4 ring-1 ring-line"
+                title={cards.length === 0 ? "Add a card to pay" : "Add a card"}
+                submitLabel="Save and use this card"
+                defaultMakeDefault={cards.length === 0}
+                disabled={processing}
+                onCancel={cards.length > 0 ? () => setAddingCard(false) : undefined}
+                onSaved={(card) => {
+                  co.addCard(card);
+                  setAddingCard(false);
+                }}
+              />
+            ) : (
+              <SavedCardPicker cards={cards} selectedId={co.selectedCardId} onSelect={co.selectCard} disabled={processing} />
+            )}
+            {!co.cardDisabled && co.payError && !showForm && <InlineAlert className="mt-3">{co.payError.title}</InlineAlert>}
+          </div>
+        )}
+
+        {payMethod === "Cash" && co.cashError && <InlineAlert className="mt-3">{co.cashError}</InlineAlert>}
+
+        <p className="mt-4 text-center text-[11px] leading-snug text-muted text-pretty">
+          {payMethod === "Card" ? "Demo cards are charged in the app by GoRide Payments. Only the last four digits are ever shown." : "Hand the cash to your driver; they confirm it in their app."}
+        </p>
+      </>
+    );
+
+  let footer: React.ReactNode = null;
+  if (failed)
+    footer = (
+      <PanelFooter className="flex flex-col gap-2">
+        <Button size="lg" arrow arrowIcon={<RefreshCw strokeWidth={2.5} />} onClick={() => co.retryPrepare()}>
+          Try again
+        </Button>
+        {!live && (
+          <Button variant="ghost" loading={busy} onClick={onSelectMockCash}>
+            Pay {formatPaidAmount(finalFare)} in cash instead
+          </Button>
+        )}
+      </PanelFooter>
+    );
+  else if (!mockCashWaiting && (stage === "ready" || processing || inAppOff))
+    footer = (
+      <PanelFooter>
+        {payMethod === "Card" ? (
+          <Button size="lg" arrow loading={processing} loadingText="Processing payment…" disabled={!co.selectedCardId || showForm || stage !== "ready"} onClick={() => co.payByCard()}>
+            Pay {formatPaidAmount(amount)}
+          </Button>
+        ) : (
+          <Button size="lg" arrow loading={live ? co.cashBusy : busy} disabled={live && stage !== "ready"} onClick={live ? () => co.payByCash() : onSelectMockCash}>
+            Pay {formatPaidAmount(amount)} in cash
+          </Button>
+        )}
+      </PanelFooter>
+    );
 
   return (
     <>
       <PanelBody>
         <StatusHeadline title="You've arrived" description={`${trip.pickup.name} → ${trip.destination.name}`} right={<Badge tone="success" size="md">Completed</Badge>} />
-        <FareReceipt payment={p} trip={trip} className="mt-4" />
-
-        {cashSelected ? (
-          <div className="mt-4 flex flex-col items-center rounded-card bg-brand-50 p-5 text-center ring-1 ring-brand-200">
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-400 text-ink">
-              <Wallet size={22} />
-            </span>
-            <p className="mt-3 text-[15px] font-semibold text-balance">
-              Pay <span className="tabular-nums">{formatLKR(p.finalFare)}</span> in cash to {first}
-            </p>
-            <p className="mt-1 text-[13px] leading-snug text-muted text-pretty">{p.cardDisabled ? "Your card was declined twice, so this trip is now cash only." : "Your driver confirms once they've received it."}</p>
-            <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-brand-800" role="status" aria-live="polite">
-              <Spinner className="h-4 w-4" /> Waiting for driver confirmation…
-            </div>
-          </div>
-        ) : (
-          <>
-            <FieldLabel className="mb-2 mt-6">Payment method</FieldLabel>
-            <div className="grid grid-cols-2 gap-2" role="group" aria-label="Payment method">
-              {(["Card", "Cash"] as const).map((m) => {
-                const disabled = m === "Card" && p.cardDisabled;
-                const active = method === m && !disabled;
-                return (
-                  <button
-                    key={m}
-                    type="button"
-                    disabled={disabled || processing}
-                    aria-pressed={active}
-                    onClick={() => setMethod(m)}
-                    className={cn(
-                      "flex min-h-[96px] flex-col items-start gap-2 rounded-card p-3.5 text-left ring-1 transition-[background-color,box-shadow] duration-200 ease-(--ease-spring)",
-                      active ? "bg-brand-50 ring-2 ring-brand-400" : "bg-white ring-line hover:bg-surface-2",
-                      disabled && "cursor-not-allowed opacity-50",
-                    )}
-                  >
-                    <span className="flex w-full items-center justify-between">
-                      <span className={cn("flex h-9 w-9 items-center justify-center rounded-xl", active ? "bg-brand-400 text-ink" : "bg-surface-2 text-ink")}>{m === "Card" ? <CreditCard size={18} /> : <Wallet size={18} />}</span>
-                      {active && <Check size={18} strokeWidth={3} className="text-ink" />}
-                    </span>
-                    <span>
-                      <span className="block text-sm font-semibold">{m}</span>
-                      <span className="block text-[11px] leading-snug text-muted">{m === "Card" ? (disabled ? "Disabled after 2 declines" : "Visa •••• 4242") : "Pay your driver directly"}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {cardResult && !cardResult.ok && <InlineAlert className="mt-3">{cardResult.message}</InlineAlert>}
-
-            {IS_MOCK && method === "Card" && !p.cardDisabled && (
-              <div className="mt-3 rounded-2xl bg-surface-2 px-4 py-3">
-                <Toggle checked={forceFail} onChange={setForceFail} tone="ink" label={<span className="text-[13px]">Demo: simulate a card decline</span>} description={<span className="text-[11px]">{attemptsLeft === 2 ? "One automatic retry, then cash fallback" : "The next decline switches this trip to cash"}</span>} />
-              </div>
-            )}
-
-            <p className="mt-4 text-center text-[11px] leading-snug text-muted text-pretty">Card details are tokenised by the payment provider. GoRide never stores them.</p>
-          </>
-        )}
+        {p ? <FareReceipt payment={p} trip={trip} className="mt-4" /> : <FinalisingFare />}
+        {body}
       </PanelBody>
-      {!cashSelected && (
-        <PanelFooter>
-          {method === "Card" ? (
-            <Button size="lg" arrow loading={processing} loadingText={attemptsLeft === 1 ? "Retrying card…" : "Processing securely…"} onClick={() => onPayCard(forceFail)}>
-              Pay {formatLKR(p.finalFare)} by card
-            </Button>
-          ) : (
-            <Button size="lg" arrow loading={busy} onClick={onSelectCash}>
-              Pay {formatLKR(p.finalFare)} in cash
-            </Button>
-          )}
-        </PanelFooter>
-      )}
+      {footer}
     </>
   );
 }
@@ -781,6 +919,11 @@ export function PaidSheet({ trip, onRate, onDone, onReceipt }: { trip: Trip; onR
   const rated = !!trip.myRating;
   const p = trip.payment;
   const first = trip.driver?.name.split(" ")[0];
+  // What goride-payment settled: straight from the checkout, or fetched (e.g. after a reload).
+  // Cash on a simulated ride never reaches the service, so it keeps the local receipt line.
+  const known = useCheckoutStore((s) => (s.result?.tripId === trip.id ? s.result : null));
+  const { state } = usePaidSummary(trip.id, known);
+  const summary = state.kind === "paid" ? state.summary : null;
   return (
     <>
       <PanelBody contentClassName="pt-6">
@@ -795,10 +938,26 @@ export function PaidSheet({ trip, onRate, onDone, onReceipt }: { trip: Trip; onR
           </motion.span>
           <h2 className="mt-4 text-xl font-semibold leading-tight tracking-[-0.015em]">Thanks for riding with GoRide</h2>
           <p className="mt-1.5 text-[13px] leading-snug text-muted tabular-nums">
-            {formatLKR(p?.finalFare ?? trip.finalFare)} paid by {p?.method ?? "—"}
-            {p?.receiptNo ? ` · Receipt ${p.receiptNo}` : ""}
+            {summary ? (
+              `${formatPaidAmount(summary.amount)} paid by ${paidWithLabel(summary)}`
+            ) : (
+              <>
+                {formatLKR(p?.finalFare ?? trip.finalFare)} paid by {p?.method ?? "—"}
+                {p?.receiptNo ? ` · Receipt ${p.receiptNo}` : ""}
+              </>
+            )}
           </p>
         </div>
+
+        <AnimatePresence initial={false}>
+          {summary && (
+            <motion.div key="summary" initial={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={fades.normal}>
+              <PaymentSummaryCard summary={summary} className="mt-6">
+                <ReceiptStatus tripId={trip.id} />
+              </PaymentSummaryCard>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {trip.driver && (
           <div className="mt-6 rounded-card bg-surface-2 p-5 text-center ring-1 ring-line">

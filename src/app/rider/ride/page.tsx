@@ -84,7 +84,6 @@ export default function RiderRidePage() {
   const [locating, setLocating] = React.useState(false);
   const [userPos, setUserPos] = React.useState<LatLng | null>(null);
   const [cancelOpen, setCancelOpen] = React.useState(false);
-  const [cardResult, setCardResult] = React.useState<{ ok: boolean; message?: string; cardDisabled?: boolean } | null>(null);
   const [sosArmed, setSosArmed] = React.useState(false);
   const [pickupRoute, setPickupRoute] = React.useState<{ tripId: string; driverId: string; geometry: LatLng[] } | null>(null);
 
@@ -232,20 +231,6 @@ export default function RiderRidePage() {
     setCancelOpen(false);
     if (ok) toast.info("Ride cancelled", complaint ? "Your complaint has been filed for review." : "No worries — book again anytime.");
     else if (useRideStore.getState().error) toast.error("Couldn't cancel", useRideStore.getState().error!);
-  };
-
-  const onPayCard = async (forceFail: boolean) => {
-    setCardResult(null);
-    const r = await s.payByCard(forceFail);
-    setCardResult(r);
-    if (!r.ok && !r.cardDisabled && r.message) {
-      // FR-PAY-07: one automatic retry
-      toast.warning("Card declined", "Retrying once automatically…");
-      await new Promise((res) => setTimeout(res, 1200));
-      const r2 = await s.payByCard(forceFail);
-      setCardResult(r2);
-      if (!r2.ok && r2.cardDisabled) toast.error("Card disabled for this trip", "Please pay your driver in cash.");
-    }
   };
 
   const onSos = async () => {
@@ -413,7 +398,7 @@ export default function RiderRidePage() {
               )}
               {trip && phase === "in_progress" && <InProgressSheet trip={trip} etaMin={etaToDest} remainingKm={remainingKm} onCancelWithComplaint={() => setCancelOpen(true)} />}
               {trip && phase === "payment" && (
-                <PaymentSheet trip={trip} preference={s.paymentPreference} busy={s.busy} cardResult={cardResult} onSelectCash={() => s.selectPayment("Cash")} onPayCard={onPayCard} />
+                <PaymentSheet trip={trip} preference={s.paymentPreference} busy={s.busy} onSelectMockCash={() => s.selectPayment("Cash")} />
               )}
               {trip && phase === "paid" && (
                 <PaidSheet
@@ -421,6 +406,7 @@ export default function RiderRidePage() {
                   onRate={(stars, c) => s.rate(user.id, stars, c)}
                   onDone={goHome}
                   onReceipt={() => {
+                    // The receipt page reads from goride-payment by trip id, so finishing first is safe.
                     const id = trip.id;
                     s.finish();
                     router.push(ROUTES.rider.trip(id));

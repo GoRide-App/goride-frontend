@@ -147,7 +147,8 @@ export const httpApi: GoRideApi = {
   payments: {
     get: (tripId) => http(`/payments/${tripId}`),
     selectMethod: (tripId, method) => http(`/payments/${tripId}/select-method`, { method: "POST", json: { method } }),
-    cardAttempt: (tripId) => http(`/payments/${tripId}/card-attempt`, { method: "POST" }),
+    // The gateway's own payment record is already settled by goride-payment; just read it back.
+    recordPayment: (tripId) => http(`/payments/${tripId}`),
     confirmCash: (tripId) => http(`/payments/${tripId}/confirm-cash`, { method: "POST" }),
     dispute: (tripId, raisedBy, reason) => http(`/payments/${tripId}/dispute`, { method: "POST", json: { raisedBy, reason } }),
     listDisputes: () => http(`/payment-disputes`),

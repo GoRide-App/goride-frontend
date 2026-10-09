@@ -17,10 +17,12 @@ import type {
   DriverLocation,
   DriverOffer,
   EmergencyContact,
+  FareBreakdown,
   LatLng,
   NotificationPreferences,
   Payment,
   PaymentDispute,
+  PaymentMethod,
   Rating,
   SosAlert,
   Trip,
@@ -83,6 +85,22 @@ const RANDOM_DRIVER_VEHICLES: Record<VehicleTypeCode, { make: string; model: str
 };
 
 const RANDOM_DRIVER_COLORS = ["White", "Silver", "Black", "Red", "Blue", "Green"];
+
+/** Rescales a fare breakdown to a different total, keeping its proportions and adding up exactly. */
+function scaleBreakdown(b: FareBreakdown, total: number): FareBreakdown {
+  const parts = ["base", "distance", "time", "stops", "waiting"] as const;
+  const sum = parts.reduce((a, k) => a + b[k], 0);
+  if (sum <= 0) return { base: total, distance: 0, time: 0, stops: 0, waiting: 0, total };
+  const out = { ...b, total };
+  let used = 0;
+  for (const k of parts) {
+    out[k] = Math.round((b[k] / sum) * total * 100) / 100;
+    used += out[k];
+  }
+  // Put the rounding remainder on the distance line so the rows still add up to the total.
+  out.distance = Math.round((out.distance + total - used) * 100) / 100;
+  return out;
+}
 
 interface TripSim {
   ownerTab: string;
@@ -764,7 +782,11 @@ class MockWorld {
     this.notify(s, t.riderId, "Trip started", `Heading to ${t.destination.name}. Share your trip status from the SOS menu anytime.`, "trip.started", t.id);
   }
 
-  completeTrip(s: WorldState, t: Trip, sim?: TripSim) {
+  /**
+   * `fare` is the trip service's own fare for a live ride: that is what goride-payment will
+   * charge, so the rider's receipt uses it instead of the locally simulated final fare.
+   */
+  completeTrip(s: WorldState, t: Trip, sim?: TripSim, fare?: number | null) {
     t.status = "PAYMENT_PENDING";
     t.completedAt = new Date().toISOString();
     t.version += 1;
@@ -774,9 +796,10 @@ class MockWorld {
     const actualKm = Math.round((sm?.routeKm ?? t.distanceKm) * 10) / 10 || t.distanceKm;
     const actualMin = t.startedAt ? Math.max(t.durationMin * 0.9, (Date.now() - new Date(t.startedAt).getTime()) / 60000 + t.durationMin * 0.85) : t.durationMin;
     const est = t.estimatedFare ?? estimateFor(vt, t.distanceKm, t.durationMin, t.stops.length).total;
-    const breakdown = estimateFor(vt, Math.max(actualKm, t.distanceKm * 0.95), Math.round(actualMin), t.stops.length);
+    let breakdown = estimateFor(vt, Math.max(actualKm, t.distanceKm * 0.95), Math.round(actualMin), t.stops.length);
     // keep final within a believable band of the estimate
     breakdown.total = clamp(breakdown.total, Math.round(est * 0.95), Math.round(est * 1.12));
+    if (fare != null && fare > 0) breakdown = scaleBreakdown(breakdown, fare);
     t.finalFare = breakdown.total;
     const payment: Payment = {
       id: uid("pay"),
@@ -858,6 +881,28 @@ class MockWorld {
 
   /** Which driver (if any) this tab is "driving" for. Set by the driver store. */
   presenceOwner: string | null = null;
+
+  /**
+   * A payment settled by the real goride-payment service (card, or cash the driver confirmed
+   * in their app): record it on the mock trip through the same markPaid path as the simulated
+   * flow. `amount` is what was actually charged; `reference` becomes the receipt number.
+   */
+  settleTrip(tripId: string, outcome: { method: PaymentMethod; amount?: number | null; reference?: string | null; paidAt?: string | null }) {
+    this.commit("payment.settled", (s) => {
+      const t = s.trips.find((x) => x.id === tripId);
+      const p = s.payments.find((x) => x.tripId === tripId);
+      if (!t || !p || p.status === "Paid") return;
+      p.method = outcome.method;
+      if (outcome.amount != null && outcome.amount > 0 && outcome.amount !== p.finalFare) {
+        p.finalFare = outcome.amount;
+        p.breakdown = scaleBreakdown(p.breakdown, outcome.amount);
+        t.finalFare = outcome.amount;
+      }
+      if (outcome.reference) p.receiptNo = outcome.reference;
+      this.markPaid(s, t, p);
+      if (outcome.paidAt) p.processedAt = outcome.paidAt;
+    });
+  }
 
   markPaid(s: WorldState, t: Trip, p: Payment) {
     p.status = "Paid";
