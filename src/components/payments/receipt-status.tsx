@@ -30,6 +30,11 @@ function useSecondsUntil(target: number | null) {
   return target == null ? 0 : Math.max(0, Math.ceil((target - now) / 1000));
 }
 
+/** 45 → "45s", 135 → "2:15". */
+function formatWait(seconds: number) {
+  return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
 /**
  * The emailed receipt for a paid trip (GET /payments/{tripId}/receipt). Polls while it is
  * being sent, and stops on Sent / Failed / NoEmail. `resend` asks for it again, honouring
@@ -155,7 +160,7 @@ export function ReceiptStatus({ tripId, detailed, className }: { tripId: string;
         {resendError && (
           <p className="mt-1 text-[12px] font-medium leading-snug text-danger text-pretty">
             {resendError.title}
-            {resendError.code === "RECEIPT_RESEND_TOO_SOON" && secondsLeft > 0 ? ` (${secondsLeft}s)` : ""}
+            {resendError.code === "RECEIPT_RESEND_TOO_SOON" && secondsLeft > 0 ? ` (${formatWait(secondsLeft)})` : ""}
           </p>
         )}
         {detailed && receipt && (status === "Sent" || status === "Failed") && (
@@ -166,7 +171,7 @@ export function ReceiptStatus({ tripId, detailed, className }: { tripId: string;
       </div>
       {resendable ? (
         <Button size="sm" variant="secondary" full={false} className="shrink-0 tabular-nums" loading={resending} loadingText="Sending…" disabled={secondsLeft > 0} onClick={resend}>
-          {secondsLeft > 0 ? `Resend in ${secondsLeft}s` : "Resend"}
+          {secondsLeft > 0 ? `Resend in ${formatWait(secondsLeft)}` : "Resend"}
         </Button>
       ) : error && error.code !== "RECEIPT_NOT_AVAILABLE" ? (
         <Button size="sm" variant="secondary" full={false} className="shrink-0" leftIcon={<RefreshCw size={14} />} onClick={reload}>
