@@ -6,23 +6,29 @@
  * matcher: it finds nearby available drivers and offers them the ride. This module then
  * watches for the outcome and feeds it back into the mock trip:
  *   - nobody available / nobody accepts in time -> NO_DRIVER_FOUND
- *   - a driver accepts                          -> DRIVER_ASSIGNED
+ *   - a driver accepts                          -> DRIVER_ASSIGNED (straight away)
+ *   - the driver's own stages                   -> arrived / in progress / completed
  * If the real service can't be reached, the mock matcher takes over as before.
  */
-import type { LatLng, VehicleTypeCode } from "@/types";
+import type { LatLng, Trip, VehicleTypeCode } from "@/types";
 import { DRIVER_OFFER_TTL_SECONDS } from "@/lib/constants";
 import { toast } from "@/components/ui/toast";
 import { world, type LiveDriverInfo } from "@/lib/mock/world";
-import { getRideRequestStatusLive, requestRideLive } from "./live-matching";
+import { getRideRequestStatusLive, requestRideLive, type MatchedDriver, type RideRequestStatus } from "./live-matching";
 
 const ASSIGNED_STATUSES = ["DRIVER_ASSIGNED", "DRIVER_EN_ROUTE", "DRIVER_ARRIVED", "TRIP_IN_PROGRESS"];
 
-const POLL_MS = 2000;
-const RESOLVE_TIMEOUT_MS = 2500;
+/** While searching, a second matters: the driver is waiting on the rider's screen too. */
+const SEARCH_POLL_MS = 1000;
+/** Once assigned, stages change on a human timescale. */
+const TRIP_POLL_MS = 1500;
 /** Offers lapse after DRIVER_OFFER_TTL_SECONDS; allow a little grace, then stop waiting. */
 const GIVE_UP_MS = (DRIVER_OFFER_TTL_SECONDS + 15) * 1000;
 const SEARCHING = ["SEARCHING_DRIVER", "REMATCHING"];
 const VEHICLE_CODES: VehicleTypeCode[] = ["BIKE", "TUK", "CAR", "XL"];
+
+/** How far along the trip service says the trip is; Accepted and beyond carry the driver. */
+const STAGE: Record<RideRequestStatus["status"], number> = { Searching: 0, NoDriver: 0, Accepted: 1, Arrived: 2, InProgress: 3, Completed: 4 };
 
 export interface LiveMatchingDeps {
   /** The accepting driver's display name and current position (best effort; both have fallbacks). */
@@ -38,6 +44,8 @@ export function isLiveTrip(tripId: string) {
 }
 
 const polling = new Set<string>();
+/** The nearby drivers the request went to, so an acceptance can be placed on the map at once. */
+const offeredTo = new Map<string, MatchedDriver[]>();
 
 /**
  * Sends the trip's ride request to the real matcher. Must be called right after the mock
@@ -65,6 +73,7 @@ export async function startLiveRideRequest(tripId: string, deps: LiveMatchingDep
       w.failLiveMatching(tripId);
       return;
     }
+    offeredTo.set(tripId, result.drivers ?? []);
   } catch (err) {
     console.warn("[goride-trip-matching] live ride request failed, falling back to the mock matcher", err);
     // Otherwise the rider just sees demo drivers with no hint that the real service wasn't used.
@@ -85,15 +94,46 @@ export function resumeLiveRideRequest(tripId: string, deps: LiveMatchingDeps): v
   if (SEARCHING.includes(trip.status)) {
     if (!polling.has(tripId)) watchOutcome(tripId, deps, new Date(trip.requestedAt ?? Date.now()).getTime());
   } else if (ASSIGNED_STATUSES.includes(trip.status)) {
-    watchLiveTripStatus(tripId);
+    watchLiveTripStatus(tripId, 0);
   }
+}
+
+/**
+ * Assigns the accepting driver straight from the poll: vehicle from the status, position from
+ * the request's nearby-driver list (or the pickup until we know better). Their name and live
+ * position are filled in afterwards, so a slow identity or location lookup never holds it up.
+ */
+function assignNow(tripId: string, trip: Trip, status: RideRequestStatus, deps: LiveMatchingDeps) {
+  const d = status.driver!;
+  const code = d.vehicleTypeCode === "TUKTUK" ? "TUK" : d.vehicleTypeCode;
+  const seen = offeredTo.get(tripId)?.find((m) => m.driverId === d.driverId);
+  offeredTo.delete(tripId);
+  world().assignLiveDriver(tripId, {
+    id: d.driverId,
+    name: "Your driver",
+    vehicleMake: d.vehicleMake,
+    vehicleModel: d.vehicleModel,
+    vehiclePlate: d.vehiclePlate,
+    vehicleTypeCode: VEHICLE_CODES.includes(code as VehicleTypeCode) ? (code as VehicleTypeCode) : trip.vehicleTypeCode,
+    location: seen ? { lat: seen.lat, lng: seen.lng } : trip.pickup,
+  } satisfies LiveDriverInfo);
+
+  deps
+    .resolveDriver(d.driverId)
+    .then((r) => world().updateLiveDriver(tripId, d.driverId, { name: r.name, location: seen ? undefined : r.location }))
+    .catch(() => {
+      /* the fallbacks stay */
+    });
 }
 
 function watchOutcome(tripId: string, deps: LiveMatchingDeps, startedAt: number) {
   if (polling.has(tripId)) return;
   polling.add(tripId);
 
-  const finish = () => polling.delete(tripId);
+  const finish = () => {
+    polling.delete(tripId);
+    offeredTo.delete(tripId);
+  };
 
   const step = async () => {
     const w = world();
@@ -113,46 +153,35 @@ function watchOutcome(tripId: string, deps: LiveMatchingDeps, startedAt: number)
         return finish();
       }
 
-      if (status.status === "Accepted" && status.driver) {
-        const d = status.driver;
-        // The name/position lookups only decorate the assignment, so never let a slow or
-        // unreachable service hold it up: give them RESOLVE_TIMEOUT_MS, then use the fallbacks.
-        const resolved = await Promise.race([
-          deps.resolveDriver(d.driverId),
-          new Promise<{ name?: string; location?: LatLng }>((resolve) => setTimeout(() => resolve({}), RESOLVE_TIMEOUT_MS)),
-        ]).catch(() => ({}) as { name?: string; location?: LatLng });
-        const code = d.vehicleTypeCode === "TUKTUK" ? "TUK" : d.vehicleTypeCode;
-        w.assignLiveDriver(tripId, {
-          id: d.driverId,
-          name: resolved.name || "Your driver",
-          vehicleMake: d.vehicleMake,
-          vehicleModel: d.vehicleModel,
-          vehiclePlate: d.vehiclePlate,
-          vehicleTypeCode: VEHICLE_CODES.includes(code as VehicleTypeCode) ? (code as VehicleTypeCode) : trip.vehicleTypeCode,
-          location: resolved.location ?? trip.pickup,
-        } satisfies LiveDriverInfo);
+      // Accepted — or already further along if the driver was quick (or a poll was missed).
+      if (STAGE[status.status] >= STAGE.Accepted && status.driver) {
+        assignNow(tripId, trip, status, deps);
+        finish();
+        if (status.status !== "Accepted") w.advanceLiveTrip(tripId, status.status as "Arrived" | "InProgress" | "Completed", status.fare);
         watchLiveTripStatus(tripId);
-        return finish();
+        return;
       }
     } catch (err) {
       // A failed poll just means try again; GIVE_UP_MS bounds the wait.
       console.warn("[goride-trip-matching] checking the ride request failed, will retry", err);
     }
 
-    setTimeout(step, POLL_MS);
+    setTimeout(step, SEARCH_POLL_MS);
   };
 
-  setTimeout(step, POLL_MS);
+  // First check right away: the request has just landed.
+  void step();
 }
 
 const progressPolling = new Set<string>();
 
 /**
  * Once a real driver is assigned, keep polling the same status endpoint for the stages they
- * report themselves from their own device (Arrived / InProgress / Completed) and bridge each one
- * into the mock trip so the rider's existing sheets react to them, same as the simulated flow.
+ * report from their own device (Arrived / InProgress / Completed) and bridge them into the mock
+ * trip, so the rider's existing sheets react to them, same as the simulated flow. Stops once
+ * Completed has been applied (the payment sheet takes over) or the trip is no longer active.
  */
-function watchLiveTripStatus(tripId: string) {
+function watchLiveTripStatus(tripId: string, firstDelayMs = TRIP_POLL_MS) {
   if (progressPolling.has(tripId)) return;
   progressPolling.add(tripId);
   const finish = () => progressPolling.delete(tripId);
@@ -160,27 +189,19 @@ function watchLiveTripStatus(tripId: string) {
   const step = async () => {
     const w = world();
     const trip = w.get().trips.find((t) => t.id === tripId);
-    if (!trip || !ASSIGNED_STATUSES.includes(trip.status)) return finish(); // cancelled, or wrapped up locally already
+    if (!trip || !ASSIGNED_STATUSES.includes(trip.status)) return finish(); // cancelled, or wrapped up already
 
     try {
       const status = await getRideRequestStatusLive(tripId);
-
-      if (status.status === "Arrived" && trip.status !== "DRIVER_ARRIVED") {
-        w.markLiveArrived(tripId);
-      } else if (status.status === "InProgress" && trip.status !== "TRIP_IN_PROGRESS") {
-        w.startLiveTrip(tripId);
-      } else if (status.status === "Completed") {
-        w.completeLiveTrip(tripId);
-        return finish();
-      }
+      if (STAGE[status.status] > STAGE.Accepted) w.advanceLiveTrip(tripId, status.status as "Arrived" | "InProgress" | "Completed", status.fare);
     } catch (err) {
       // A failed poll just means try again; there's no give-up bound here since the driver
       // could be mid-trip for a long time.
       console.warn("[goride-trip-matching] checking trip progress failed, will retry", err);
     }
 
-    setTimeout(step, POLL_MS);
+    setTimeout(step, TRIP_POLL_MS);
   };
 
-  setTimeout(step, POLL_MS);
+  setTimeout(step, firstDelayMs);
 }

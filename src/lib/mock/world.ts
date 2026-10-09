@@ -501,37 +501,56 @@ class MockWorld {
   }
 
   /**
-   * Bridges from the real trip-matching backend into the mock trip -- the driver's own device
-   * called POST /matching/offers/{tripId}/status; the rider's side polls that same status and
-   * calls these so the rider's existing sheets (arrived + PIN, in-progress, completed) react to
-   * the driver's real actions instead of the local simulated timers.
+   * The real driver's name and position arrived after the assignment (they're looked up in
+   * the background so accepting never waits on them). A better position restarts the simulated
+   * drive to pickup from there, unless that leg's route is already being fetched.
    */
-  markLiveArrived(tripId: string) {
-    this.commit("trip.live.arrived", (s) => {
+  updateLiveDriver(tripId: string, driverId: string, info: { name?: string; location?: LatLng }) {
+    if (!info.name && !info.location) return;
+    this.commit("trip.live.driver", (s) => {
+      const d = s.drivers.find((x) => x.id === driverId);
+      if (d && info.name) d.name = info.name;
       const t = s.trips.find((x) => x.id === tripId);
-      if (!t || !["DRIVER_ASSIGNED", "DRIVER_EN_ROUTE"].includes(t.status)) return;
-      t.status = "DRIVER_ARRIVED";
-      t.arrivedAt = new Date().toISOString();
-      t.version += 1;
+      if (!t || t.driverId !== driverId) return;
+      if (d) t.driver = this.driverSummary(d);
       const sim = s.sim[tripId];
-      if (sim) sim.phase = "waiting";
-      this.notify(s, t.riderId, "Your driver has arrived", `${t.driver?.name ?? "Your driver"} is waiting at ${t.pickup.name}.`, "trip.driverArrived", tripId);
+      if (info.location && ["DRIVER_ASSIGNED", "DRIVER_EN_ROUTE"].includes(t.status) && sim?.phase === "toPickup" && !sim.loadingRoute) {
+        s.locations[driverId] = { driverId, lat: info.location.lat, lng: info.location.lng, heading: s.locations[driverId]?.heading ?? 0, status: "OnTrip", lastUpdated: new Date().toISOString() };
+        sim.route = undefined;
+        sim.moveStartedAt = undefined;
+      }
     });
   }
 
-  startLiveTrip(tripId: string) {
-    this.commit("trip.live.started", (s) => {
-      const t = s.trips.find((x) => x.id === tripId);
-      if (!t || t.status !== "DRIVER_ARRIVED") return;
-      this.startTrip(s, t, s.sim[tripId]);
-    });
-  }
+  /**
+   * Bridge from the real trip-matching backend into the mock trip: the driver's own device
+   * advances the trip (POST /matching/offers/{tripId}/status) and the rider's side polls it.
+   * A poll can miss a short stage, or the driver can be ahead of us (Accepted → InProgress, or
+   * straight to Completed), while each local transition only fires from its exact previous
+   * state — so every stage in between is applied in order, in one commit, and the rider's
+   * sheets land on the latest one instead of getting stuck. `fare` is the trip service's own
+   * fare, used as the final fare on completion.
+   */
+  advanceLiveTrip(tripId: string, target: "Arrived" | "InProgress" | "Completed", fare?: number | null) {
+    const rank = (status: Trip["status"]) =>
+      status === "DRIVER_ARRIVED" ? 1 : status === "TRIP_IN_PROGRESS" ? 2 : ["TRIP_COMPLETED", "PAYMENT_PENDING", "PAID", "CLOSED"].includes(status) ? 3 : 0;
+    const want = target === "Arrived" ? 1 : target === "InProgress" ? 2 : 3;
+    const current = this.get().trips.find((x) => x.id === tripId);
+    if (!current || current.status === "CANCELLED" || rank(current.status) >= want) return;
 
-  completeLiveTrip(tripId: string) {
-    this.commit("trip.live.completed", (s) => {
+    this.commit(`trip.live.${target}`, (s) => {
       const t = s.trips.find((x) => x.id === tripId);
-      if (!t || t.status !== "TRIP_IN_PROGRESS") return;
-      this.completeTrip(s, t, s.sim[tripId]);
+      if (!t) return;
+      const sim = s.sim[tripId];
+      if (t.status === "DRIVER_ASSIGNED" || t.status === "DRIVER_EN_ROUTE") {
+        t.status = "DRIVER_ARRIVED";
+        t.arrivedAt = new Date().toISOString();
+        t.version += 1;
+        if (sim) sim.phase = "waiting";
+        if (want === 1) this.notify(s, t.riderId, "Your driver has arrived", `${t.driver?.name ?? "Your driver"} is waiting at ${t.pickup.name}.`, "trip.driverArrived", tripId);
+      }
+      if (want >= 2 && t.status === "DRIVER_ARRIVED") this.startTrip(s, t, sim);
+      if (want >= 3 && t.status === "TRIP_IN_PROGRESS") this.completeTrip(s, t, sim, fare);
     });
   }
 
