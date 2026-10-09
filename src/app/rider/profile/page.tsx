@@ -10,12 +10,13 @@ import {
   ProfileScreen,
 } from "@/components/profile/profile-screen";
 import { ScreenError, ScreenLoader } from "@/components/dashboard/screen-loader";
+import { PaymentMethodsSection } from "@/components/payments/payment-methods-section";
 import { Button } from "@/components/ui/button";
 import { errorMessage, identity } from "@/lib/auth/identity-store";
 import { getMe } from "@/lib/api";
 import { identityLoginUrl, normalizeRole, ROUTES } from "@/lib/constants";
 
-/** Rider profile — FR-AUTH-04 / FR-AUTH-05 / FR-AUTH-07. */
+/** Rider profile — FR-AUTH-04 / FR-AUTH-05 / FR-AUTH-07, plus saved payment cards. */
 export default function RiderProfilePage() {
   const router = useRouter();
   const hydrated = useAuthStore((state) => state.hydrated);
@@ -90,6 +91,7 @@ export default function RiderProfilePage() {
   return (
     <div className="mx-auto w-full max-w-[720px]">
       <ProfileScreen user={user} tone="rider" title="Rider profile" phoneOnly>
+        <PaymentMethodsSection />
         <EmergencyContactsSection user={user} />
         <NotificationPrefsSection user={user} />
       </ProfileScreen>

@@ -8,7 +8,10 @@ const nextConfig: NextConfig = {
 
   async rewrites() {
     const backend = process.env.BACKEND_URL ?? "https://localhost:7136";
+    // goride-payment reads the same app_session cookie, so it is proxied same-origin too.
+    const payment = process.env.PAYMENT_URL ?? "http://localhost:8084";
     return [
+      { source: "/payments/:path*", destination: `${payment}/payments/:path*` },
       { source: "/api/:path*", destination: `${backend}/api/:path*` },
       { source: "/login", destination: `${backend}/login` },
       { source: "/logout", destination: `${backend}/logout` },
