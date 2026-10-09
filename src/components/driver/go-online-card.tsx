@@ -59,9 +59,12 @@ export function GoOnlineCard({
             {statusPill}
             {vehicle && <span className="truncate text-[13px] font-semibold tabular-nums">{vehicle.plate}</span>}
           </div>
-          <Button size="sm" variant={online || locked ? "dark" : "primary"} full={false} loading={busy} disabled={locked} onClick={() => onChange(!online)}>
-            {label}
-          </Button>
+          {/* Locked: there is nothing to toggle, so no button that reads "Go online" mid-trip. */}
+          {!locked && (
+            <Button size="sm" variant={online ? "dark" : "primary"} full={false} loading={busy} onClick={() => onChange(!online)}>
+              {label}
+            </Button>
+          )}
         </div>
         {lockNote && <div className="px-1 pb-0.5">{lockNote}</div>}
       </div>
@@ -78,22 +81,29 @@ export function GoOnlineCard({
           </span>
         )}
       </div>
-      <h2 className="mt-5 text-[26px] font-semibold leading-[1.1] tracking-[-0.02em] text-balance md:text-[28px]">{online ? "You're online" : `Ready to drive, ${name}?`}</h2>
+      <h2 className="mt-5 text-[26px] font-semibold leading-[1.1] tracking-[-0.02em] text-balance md:text-[28px]">
+        {locked ? "You're on a trip" : online ? "You're online" : `Ready to drive, ${name}?`}
+      </h2>
       <p className={cn("mt-2 text-[14px] leading-relaxed text-pretty", online || locked ? "text-ink/70" : "text-white/65")}>
-        {online ? "We'll offer you ride requests near you. Keep this screen open while you wait." : "Go online to start receiving ride requests near your location."}
+        {locked
+          ? "New ride requests pause until this trip is done."
+          : online
+            ? "We'll offer you ride requests near you. Keep this screen open while you wait."
+            : "Go online to start receiving ride requests near your location."}
       </p>
-      <Button
-        className="mt-5"
-        size="lg"
-        variant={online || locked ? "dark" : "primary"}
-        arrow={!online && !locked}
-        loading={busy}
-        disabled={locked}
-        loadingText={online ? "Going offline…" : "Going online…"}
-        onClick={() => onChange(!online)}
-      >
-        {label}
-      </Button>
+      {!locked && (
+        <Button
+          className="mt-5"
+          size="lg"
+          variant={online ? "dark" : "primary"}
+          arrow={!online}
+          loading={busy}
+          loadingText={online ? "Going offline…" : "Going online…"}
+          onClick={() => onChange(!online)}
+        >
+          {label}
+        </Button>
+      )}
       {lockNote && <div className="mt-3">{lockNote}</div>}
     </section>
   );

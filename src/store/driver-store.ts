@@ -240,13 +240,30 @@ export const useDriverStore = create<DriverState>()((set, get) => {
     set({ loading: true, driverId });
     // Independent of the mock-world lookups below, which reject for real (Asgardeo) drivers.
     void get().restoreLiveTrip();
-    try {
-      const [driver, trip, offer, location] = await Promise.all([api.drivers.get(driverId), api.trips.activeForDriver(driverId), api.trips.currentOffer(driverId), api.location.getDriverLocation(driverId)]);
-      set({ driver, online: driver.profile.online, trip, offer, location, loading: false });
-      if (trip) lastTripToast = `${trip.id}|${trip.status}`;
-    } catch (e) {
-      set({ loading: false, error: errorMessage(e) });
-    }
+    // Each lookup stands alone: the mock-world ones reject with "Driver not found" for real
+    // (Asgardeo) drivers, who aren't seeded there. That is expected, so it must not surface as
+    // an error or stop the location (and with it the online state) from loading.
+    const [driver, trip, offer, location] = await Promise.allSettled([
+      api.drivers.get(driverId),
+      api.trips.activeForDriver(driverId),
+      api.trips.currentOffer(driverId),
+      api.location.getDriverLocation(driverId),
+    ]);
+    const value = <T,>(r: PromiseSettledResult<T>) => (r.status === "fulfilled" ? r.value : null);
+    const mockDriver = value(driver);
+    const loc = value(location);
+    const activeTrip = value(trip);
+    set({
+      driver: mockDriver,
+      // Real drivers: goride-location's status is the source of truth (OnTrip counts as online).
+      online: mockDriver ? mockDriver.profile.online : loc?.status === "Online" || loc?.status === "OnTrip",
+      trip: activeTrip,
+      offer: value(offer),
+      location: loc,
+      loading: false,
+      error: null,
+    });
+    if (activeTrip) lastTripToast = `${activeTrip.id}|${activeTrip.status}`;
   },
 
   start(driverId) {
