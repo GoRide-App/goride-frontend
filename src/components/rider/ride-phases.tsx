@@ -746,7 +746,6 @@ export function PaymentSheet({ trip, preference, busy, onSelectMockCash }: { tri
 
   let body: React.ReactNode;
   if (mockCashWaiting) body = <CashWaiting amount={p.finalFare} first={first} note="Your driver confirms once they've received it." />;
-  else if (stage === "awaiting_cash") body = <CashWaiting amount={amount} first={first} note="Hand over the cash; your driver confirms it in their app." />;
   else if (stage === "paid")
     body = (
       <p className="mt-4 flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-[13px] font-semibold text-emerald-700" role="status">

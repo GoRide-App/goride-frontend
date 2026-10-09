@@ -1,10 +1,10 @@
 "use client";
 
 import { create } from "zustand";
-import type { Driver, DriverLocation, DriverOffer, LatLng, PaymentStatusView, Trip } from "@/types";
+import type { Driver, DriverLocation, DriverOffer, LatLng, Trip } from "@/types";
 import { api, IS_MOCK, errorMessage, type DriverTripAction } from "@/lib/api";
 import { world } from "@/lib/mock/world";
-import { bearing, formatLKR } from "@/lib/utils";
+import { bearing } from "@/lib/utils";
 import { getCurrentPosition } from "@/lib/geo/providers";
 import {
   acceptOfferLive,
@@ -16,8 +16,6 @@ import {
   type LiveDriverOffer,
   type TripStatusAction,
 } from "@/lib/api/live-matching";
-import { isPaymentError, paymentService } from "@/lib/api/payments-live";
-import { cardLabel } from "@/lib/card-input";
 import { toast } from "@/components/ui/toast";
 
 interface DriverState {
@@ -32,14 +30,10 @@ interface DriverState {
   manualLocation: boolean;
   /** Ride requests from the real matching service waiting for this driver (polled while online). */
   liveOffers: LiveDriverOffer[];
-  /** The ride this driver accepted and is on (or finished but not yet paid for). */
+  /** The ride this driver accepted and is on (or just completed, until they tap Done). */
   acceptedOffer: LiveDriverOffer | null;
   /** Trip id of the accept call in flight, if any (the trip card already shows, optimistically). */
   acceptingTripId: string | null;
-  /** goride-payment's view of the accepted trip once it is completed; null until the record exists. */
-  livePayment: PaymentStatusView | null;
-  livePaymentError: string | null;
-  confirmingCash: boolean;
   busy: boolean;
   error: string | null;
 
@@ -57,9 +51,7 @@ interface DriverState {
   acceptLiveOffer: (tripId: string) => Promise<boolean>;
   /** Advance the accepted trip one stage (Arrived / InProgress / Completed). Resolves true on success. */
   advanceLiveTrip: (action: TripStatusAction) => Promise<boolean>;
-  /** The rider handed over the cash: tell goride-payment, which marks the trip paid. */
-  confirmLiveCash: () => Promise<boolean>;
-  /** Clears the finished trip. Refused until goride-payment says it is paid. */
+  /** Clears the finished trip. Refused only while it is still underway. */
   dismissAcceptedOffer: () => void;
   accept: () => Promise<boolean>;
   decline: () => Promise<void>;
@@ -73,22 +65,19 @@ interface DriverState {
 }
 
 /**
- * A driver is tied to their live trip while driving it, and after completing it until the
- * rider has paid: no going offline, no new offers, status OnTrip, and the trip card stays.
+ * A driver is tied to their live trip only while driving it: no going offline, no new offers,
+ * status OnTrip. Once it is completed they can finish straight away; paying is the rider's side.
  */
-export function liveTripLocked(st: Pick<DriverState, "acceptedOffer" | "livePayment">) {
-  const o = st.acceptedOffer;
-  if (!o) return false;
-  if (ON_TRIP_STATUSES.includes(o.status)) return true;
-  return o.status === "Completed" && st.livePayment?.status !== "Paid";
+export function liveTripLocked(st: Pick<DriverState, "acceptedOffer">) {
+  return !!st.acceptedOffer && ON_TRIP_STATUSES.includes(st.acceptedOffer.status);
 }
 
 /** What goride-location should hear: OnTrip while on a (mock or live) trip, else the toggle. */
-function locationStatus(st: Pick<DriverState, "trip" | "online" | "acceptedOffer" | "livePayment">): DriverLocation["status"] {
+function locationStatus(st: Pick<DriverState, "trip" | "online" | "acceptedOffer">): DriverLocation["status"] {
   return st.trip || liveTripLocked(st) ? "OnTrip" : st.online ? "Online" : "Offline";
 }
 
-/** One sync round every SYNC_MS, never overlapping: offers, the trip's stage, or its payment. */
+/** One sync round every SYNC_MS, never overlapping: open offers, or the accepted trip's stage. */
 const SYNC_MS = 1500;
 /** 204s in a row before an in-progress trip the service no longer knows about is let go. */
 const ACTIVE_MISSES_TO_DROP = 3;
@@ -131,10 +120,10 @@ export const useDriverStore = create<DriverState>()((set, get) => {
     api.location.updateDriverLocation(st.driverId, st.location, st.location.heading, status).catch(() => {});
   }
 
-  /** Swaps in a (new) accepted trip, resetting its payment state. */
-  function setAccepted(offer: LiveDriverOffer | null, payment: PaymentStatusView | null = null) {
+  /** Swaps in a (new) accepted trip. */
+  function setAccepted(offer: LiveDriverOffer | null) {
     activeMisses = 0;
-    set({ acceptedOffer: offer, livePayment: payment, livePaymentError: null, ...(offer ? { liveOffers: [] } : {}) });
+    set({ acceptedOffer: offer, ...(offer ? { liveOffers: [] } : {}) });
   }
 
   /** One round of the driver's live sync. Whatever it awaits, it re-checks state before writing. */
@@ -180,24 +169,7 @@ export const useDriverStore = create<DriverState>()((set, get) => {
       }
       return;
     }
-
-    // Completed: the driver stays on it until goride-payment says it is paid.
-    if (offer.status === "Completed" && st.livePayment?.status !== "Paid") {
-      try {
-        const payment = await paymentService.status(offer.tripId);
-        const now = get();
-        if (now.acceptedOffer?.tripId !== offer.tripId || now.confirmingCash || now.livePayment?.status === "Paid") return;
-        const prev = now.livePayment;
-        set({ livePayment: payment, livePaymentError: null });
-        if (payment?.status === "AwaitingCash" && prev?.status !== "AwaitingCash") toast.notify("Rider is paying cash", `Collect ${formatLKR(payment.amount)}, then tap Cash received.`);
-        if (payment?.status === "Paid") {
-          toast.success(payment.method === "Cash" ? "Cash confirmed" : "Card payment received", `${formatLKR(payment.amount)}${payment.method === "Card" && payment.cardLast4 ? ` · ${cardLabel(payment.cardBrand, payment.cardLast4)}` : ""}`);
-          pushStatus();
-        }
-      } catch (e) {
-        if (get().acceptedOffer?.tripId === offer.tripId) set({ livePaymentError: errorMessage(e, "Couldn't check the payment.") });
-      }
-    }
+    // Completed: nothing to sync; the trip card waits for the driver's Done.
   }
 
   function startSync(driverId: string) {
@@ -230,9 +202,6 @@ export const useDriverStore = create<DriverState>()((set, get) => {
   liveOffers: [],
   acceptedOffer: null,
   acceptingTripId: null,
-  livePayment: null,
-  livePaymentError: null,
-  confirmingCash: false,
   busy: false,
   error: null,
 
@@ -382,19 +351,13 @@ export const useDriverStore = create<DriverState>()((set, get) => {
     try {
       const active = await getActiveOfferLive(driverId);
       if (!active || get().acceptingTripId) return;
-      if (!ON_TRIP_STATUSES.includes(active.status) && active.status !== "Completed") return;
+      // Only a trip still underway comes back; a completed one is already finished for the driver.
+      if (!ON_TRIP_STATUSES.includes(active.status)) return;
       if (get().acceptedOffer?.tripId === active.tripId) {
         set({ acceptedOffer: active });
         return;
       }
-      if (active.status === "Completed") {
-        // A finished trip only matters while it's unpaid (the service returns them for 6 h).
-        const payment = await paymentService.status(active.tripId).catch(() => undefined);
-        if (payment?.status === "Paid") return;
-        setAccepted(active, payment ?? null);
-      } else {
-        setAccepted(active);
-      }
+      setAccepted(active);
       pushStatus();
     } catch {
       /* trip service unreachable (or without /offers/active yet): nothing to restore */
@@ -426,7 +389,7 @@ export const useDriverStore = create<DriverState>()((set, get) => {
       setAccepted(null);
       pushStatus();
       if (driverBusy) {
-        toast.error("You're already on a trip", "Finish and get paid for your current trip before taking another.");
+        toast.error("You're already on a trip", "Finish your current trip before taking another.");
         void get().restoreLiveTrip();
       } else {
         toast.error(gone ? "Too late" : "Couldn't accept the ride", errorMessage(e));
@@ -443,34 +406,12 @@ export const useDriverStore = create<DriverState>()((set, get) => {
     try {
       const updated = await updateTripStatusLive(offer.tripId, driverId, action);
       set({ acceptedOffer: updated, busy: false });
+      // Completing frees the driver at once, so goride-location hears Online/Offline again.
+      pushStatus();
       return true;
     } catch (e) {
       set({ busy: false, error: errorMessage(e) });
       toast.error("Couldn't update the trip", errorMessage(e));
-      return false;
-    }
-  },
-
-  async confirmLiveCash() {
-    const offer = get().acceptedOffer;
-    if (!offer || offer.status !== "Completed" || get().confirmingCash) return false;
-    set({ confirmingCash: true });
-    try {
-      const payment = await paymentService.confirmCash(offer.tripId);
-      set({ livePayment: payment, livePaymentError: null, confirmingCash: false });
-      if (payment.status === "Paid") {
-        toast.success("Cash confirmed", `${formatLKR(payment.amount)} received`);
-        pushStatus();
-      }
-      return true;
-    } catch (e) {
-      set({ confirmingCash: false });
-      toast.error("Couldn't confirm the cash", errorMessage(e));
-      // The rider switched back, or it is already settled: show what the service has now.
-      if (isPaymentError(e, "CASH_NOT_SELECTED", "PAYMENT_SETTLED")) {
-        const payment = await paymentService.status(offer.tripId).catch(() => null);
-        if (get().acceptedOffer?.tripId === offer.tripId) set({ livePayment: payment });
-      }
       return false;
     }
   },
@@ -485,7 +426,7 @@ export const useDriverStore = create<DriverState>()((set, get) => {
     const driverId = get().driverId;
     if (!driverId) return false;
     if (liveTripLocked(get())) {
-      toast.info("You're on a trip", "You can go offline after this trip is paid.");
+      toast.info("You're on a trip", "You can go offline once this trip is finished.");
       return false;
     }
     set({ busy: true, error: null });

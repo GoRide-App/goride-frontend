@@ -4,7 +4,7 @@
  * The rider's checkout for a completed trip, backed by the real goride-payment service.
  *
  *   preparing ──► ready ──► processing ──► paid          (card)
- *       │           └────► awaiting_cash ──► paid       (cash on a live ride; the driver confirms)
+ *       │           └────────────────────► paid         (cash on a live ride, settled with the driver)
  *       └──► prepare_failed (nothing after ~30 s; Retry starts over)
  *
  * Preparing differs by ride: a SIMULATED ride (demo driver, the trip service never saw it)
@@ -22,7 +22,7 @@ import { isPaymentError, paidOutcomeFromStatus, paymentService } from "@/lib/api
 import { sortCards, withCard } from "@/lib/card-input";
 import { useRideStore } from "./ride-store";
 
-export type CheckoutStage = "preparing" | "prepare_failed" | "ready" | "processing" | "awaiting_cash" | "paid";
+export type CheckoutStage = "preparing" | "prepare_failed" | "ready" | "processing" | "paid";
 
 const POLL_MS = 1500;
 const PREPARE_TIMEOUT_MS = 30_000;
@@ -58,7 +58,7 @@ interface CheckoutState {
   /** A card saved from the inline form: add it and pay with it. */
   addCard: (card: SavedCard) => void;
   payByCard: () => Promise<void>;
-  /** Live rides only: tell the payment service the rider pays cash, then wait for the driver. */
+  /** Live rides only: tell the payment service the rider pays the driver in cash. */
   payByCash: () => Promise<void>;
 }
 
@@ -87,11 +87,9 @@ export const useCheckoutStore = create<CheckoutState>()((set, get) => {
   function apply(st: PaymentStatusView) {
     if (get().tripId !== st.tripId) return;
     set({ status: st, prepareError: null });
-    if (st.status === "Paid") return finishPaid(paidOutcomeFromStatus(st));
-    if (st.status === "AwaitingCash") {
-      set({ stage: "awaiting_cash" });
-      return pollCash();
-    }
+    // Cash is handed to the driver, who doesn't confirm it in the app, so choosing it settles
+    // the checkout for the rider.
+    if (st.status === "Paid" || st.status === "AwaitingCash") return finishPaid(paidOutcomeFromStatus(st));
     stopLoops();
     set({ stage: "ready" });
     if (!get().cards) void get().loadCards();
@@ -140,28 +138,6 @@ export const useCheckoutStore = create<CheckoutState>()((set, get) => {
     void step();
   }
 
-  /** Cash on a live ride: the driver confirms from their app, so watch for Paid. */
-  function pollCash() {
-    const tripId = get().tripId;
-    if (!tripId) return;
-    stopLoops();
-    running = true;
-    const token = generation;
-    const step = async () => {
-      if (token !== generation) return;
-      try {
-        const st = await paymentService.status(tripId);
-        if (token !== generation) return;
-        if (st?.status === "Paid") return finishPaid(paidOutcomeFromStatus(st));
-        if (st) set({ status: st });
-      } catch {
-        // A missed poll just means ask again.
-      }
-      timer = setTimeout(step, POLL_MS);
-    };
-    timer = setTimeout(step, POLL_MS);
-  }
-
   return {
     tripId: null,
     live: false,
@@ -205,7 +181,6 @@ export const useCheckoutStore = create<CheckoutState>()((set, get) => {
       // Same trip, sheet back on screen: pick up where it left off.
       if (running) return;
       if (st.stage === "preparing" || st.stage === "prepare_failed") prepare();
-      else if (st.stage === "awaiting_cash") pollCash();
       else if (st.stage === "ready" && !st.cards) void get().loadCards();
     },
 
