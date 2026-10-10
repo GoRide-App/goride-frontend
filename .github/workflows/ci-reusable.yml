@@ -1,0 +1,76 @@
+name: CI (reusable)
+
+# Nothing merges into dev or main unless the "CI Gate" job at the bottom is green.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+  # Build-only placeholders. CI never needs a real Firebase project.
+  NEXT_PUBLIC_FIREBASE_API_KEY: ci-placeholder
+  NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: goride-ci.invalid
+  NEXT_PUBLIC_FIREBASE_PROJECT_ID: goride-ci
+  NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: goride-ci.invalid
+  NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "000000000000"
+  NEXT_PUBLIC_FIREBASE_APP_ID: "1:000000000000:web:ci"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  checks:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      # Run every check even if another one fails.
+      fail-fast: false
+      matrix:
+        include:
+          - name: Lint
+            command: npx eslint src
+          - name: Typecheck
+            command: npx tsc --noEmit
+          - name: Unit Tests
+            # Skips cleanly until package.json defines a test script.
+            command: npm run test --if-present
+          - name: Build
+            command: npm run build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # LayoutProps and other route helpers do not exist in a fresh checkout.
+      - name: Generate route types
+        if: matrix.name == 'Typecheck'
+        run: npx next typegen
+
+      - name: ${{ matrix.name }}
+        run: ${{ matrix.command }}
+
+  ci-gate:
+    name: CI Gate
+    runs-on: ubuntu-latest
+    needs: [checks]
+    if: always()
+    steps:
+      - name: Evaluate
+        run: |
+          echo "checks : ${{ needs.checks.result }}"
+          if [ "${{ needs.checks.result }}" != "success" ]; then
+            echo "::error title=CI failed::One or more required jobs did not pass."
+            exit 1
+          fi
+          echo "All required jobs passed."
