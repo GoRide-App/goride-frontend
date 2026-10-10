@@ -25,6 +25,9 @@ export class PaymentApiError extends Error {
     public readonly code?: string,
     /** Set on 429s that only need a wait (e.g. RECEIPT_RESEND_TOO_SOON). */
     public readonly retryAfterSeconds?: number,
+    public readonly retryable?: boolean,
+    public readonly autoRetried?: boolean,
+    public readonly attempts?: number,
   ) {
     super(message);
     this.name = "PaymentApiError";
@@ -77,7 +80,10 @@ async function call<T>(path: string, init: { method?: "GET" | "POST" | "DELETE";
   const data = text ? parse(text) : null;
 
   if (!res.ok) {
-    const problem = (data && typeof data === "object" ? data : {}) as { title?: unknown; code?: unknown; retryAfterSeconds?: unknown };
+    const problem = (data && typeof data === "object" ? data : {}) as {
+      title?: unknown; code?: unknown; retryAfterSeconds?: unknown;
+      retryable?: unknown; autoRetried?: unknown; attempts?: unknown;
+    };
     const header = Number(res.headers.get("Retry-After"));
     const retryAfter = typeof problem.retryAfterSeconds === "number" ? problem.retryAfterSeconds : Number.isFinite(header) && header > 0 ? header : undefined;
     throw new PaymentApiError(
@@ -85,6 +91,9 @@ async function call<T>(path: string, init: { method?: "GET" | "POST" | "DELETE";
       res.status,
       typeof problem.code === "string" ? problem.code : undefined,
       retryAfter,
+      typeof problem.retryable === "boolean" ? problem.retryable : undefined,
+      typeof problem.autoRetried === "boolean" ? problem.autoRetried : undefined,
+      typeof problem.attempts === "number" ? problem.attempts : undefined,
     );
   }
   return data as T;
@@ -137,9 +146,9 @@ export const paymentService = {
     return (await call<PaymentStatusView | null>(`${trip(tripId)}/status`)) ?? null;
   },
 
-  /** Charges a saved card (~1.5 s). 402 codes are declines; an already-paid trip resolves with alreadyPaid. */
-  pay(tripId: string, cardId: string): Promise<PayResult> {
-    return call(`${trip(tripId)}/pay`, { method: "POST", body: { cardId } });
+  /** Reuse requestId after an uncertain response; a manual retry after a decline needs a new ID. */
+  pay(tripId: string, cardId: string, requestId: string): Promise<PayResult> {
+    return call(`${trip(tripId)}/pay`, { method: "POST", body: { cardId, requestId } });
   },
 
   confirmation(tripId: string): Promise<PaymentConfirmationView> {

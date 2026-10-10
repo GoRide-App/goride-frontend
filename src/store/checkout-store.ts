@@ -42,7 +42,9 @@ interface CheckoutState {
   cardsError: string | null;
   selectedCardId: string | null;
   /** The last decline / validation error from POST /pay, shown next to the card list. */
-  payError: { title: string; code?: string } | null;
+  payError: { title: string; code?: string; retryable?: boolean; autoRetried?: boolean; attempts?: number } | null;
+  autoRetrying: boolean;
+  pendingPay: { requestId: string; cardId: string } | null;
   /** CARD_DISABLED: card payments are off for this trip, so cash is the only way left. */
   cardDisabled: boolean;
   /** What was paid; the success state and the receipt read this. */
@@ -67,6 +69,21 @@ let timer: ReturnType<typeof setTimeout> | null = null;
 let running = false;
 let paymentMutation = 0;
 
+// Preserve the request identity across a reload after a lost response. No card details.
+function savedRequest(tripId: string): CheckoutState["pendingPay"] {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(`card-pay:${tripId}`) ?? "null");
+    return typeof saved?.requestId === "string" && typeof saved?.cardId === "string" ? saved : null;
+  } catch { return null; }
+}
+
+function rememberRequest(tripId: string, request: CheckoutState["pendingPay"]) {
+  try {
+    if (request) sessionStorage.setItem(`card-pay:${tripId}`, JSON.stringify(request));
+    else sessionStorage.removeItem(`card-pay:${tripId}`);
+  } catch { /* In-memory idempotency still works when storage is unavailable. */ }
+}
+
 function stopLoops() {
   generation += 1;
   if (timer) clearTimeout(timer);
@@ -75,11 +92,14 @@ function stopLoops() {
 }
 
 export const useCheckoutStore = create<CheckoutState>()((set, get) => {
+  let inFlight: string | null = null;
+
   /** Mirrors the payment into the mock-world trip so the rest of the app sees it as PAID. */
   function finishPaid(outcome: PaidOutcome) {
-    if (get().tripId !== outcome.tripId) return;
+    if (get().tripId !== outcome.tripId || get().stage === "paid") return;
     stopLoops();
-    set({ stage: "paid", result: outcome, payError: null, prepareError: null });
+    rememberRequest(outcome.tripId, null);
+    set({ stage: "paid", result: outcome, payError: null, prepareError: null, pendingPay: null, autoRetrying: false });
     void useRideStore.getState().settlePayment(outcome);
   }
 
@@ -89,8 +109,31 @@ export const useCheckoutStore = create<CheckoutState>()((set, get) => {
     set({ status: st, prepareError: null });
     // Choosing cash finishes the rider's checkout; driver confirmation is a separate story.
     if (st.status === "Paid" || st.status === "AwaitingCash") return finishPaid(paidOutcomeFromStatus(st));
-    set({ stage: "ready" });
     if (st.status === "Pending" && !get().cards) void get().loadCards();
+    const own = get().pendingPay;
+    // Only the current request can advance its retry indicator. An older status cannot
+    // enable Pay, clear a failure, or hide a retry already observed for this request.
+    if (inFlight && own?.requestId === inFlight) {
+      if (st.requestId === inFlight && st.requestState === "Retrying") set({ autoRetrying: true });
+      return;
+    }
+    if (st.requestState === "Processing" || st.requestState === "Retrying") {
+      if (!own) {
+        set({ stage: "processing", autoRetrying: st.requestState === "Retrying" });
+        return;
+      }
+      // A lost response/reload can resume the durable request using the same ID.
+      set({ stage: "ready", autoRetrying: false });
+      return;
+    }
+    if (st.requestState === "Failed" && (!own || st.requestId === own.requestId)) {
+      rememberRequest(st.tripId, null);
+      set({ pendingPay: null, autoRetrying: false, payError: {
+        title: st.retryable ? "Payment didn't go through. Retry or use another card." : "Your card was declined. Try another card.",
+        code: st.lastFailureCode ?? undefined, retryable: st.retryable, autoRetried: st.autoRetried, attempts: st.requestAttempts,
+      } });
+    }
+    set({ stage: "ready" });
   }
 
   /** Waits (bounded) for the payable record to exist, creating it first for a simulated ride. */
@@ -103,7 +146,7 @@ export const useCheckoutStore = create<CheckoutState>()((set, get) => {
     const startedAt = Date.now();
     let reported = live; // a live ride's completion comes from the trip service
     let lastError: string | null = null;
-    set({ stage: "preparing", prepareError: null, inAppUnavailable: false });
+    if (!inFlight) set({ stage: "preparing", prepareError: null, inAppUnavailable: false });
 
     const fail = (message: string, inAppUnavailable = false) => {
       if (token !== generation) return;
@@ -114,10 +157,6 @@ export const useCheckoutStore = create<CheckoutState>()((set, get) => {
     const step = async () => {
       if (token !== generation) return;
       const mutation = paymentMutation;
-      if (get().stage === "processing") {
-        timer = setTimeout(step, POLL_MS);
-        return;
-      }
       try {
         if (!reported) {
           await paymentService.completeDemoTrip(tripId, finalFare);
@@ -127,7 +166,7 @@ export const useCheckoutStore = create<CheckoutState>()((set, get) => {
         if (token !== generation) return;
         if (st) {
           // A poll started before Pay must not reset the processing state and enable Pay again.
-          if (mutation === paymentMutation && get().stage !== "processing") apply(st);
+          if (mutation === paymentMutation) apply(st);
           if (token !== generation) return;
           timer = setTimeout(step, POLL_MS);
           return;
@@ -159,6 +198,8 @@ export const useCheckoutStore = create<CheckoutState>()((set, get) => {
     cardsError: null,
     selectedCardId: null,
     payError: null,
+    autoRetrying: false,
+    pendingPay: null,
     cardDisabled: false,
     result: null,
 
@@ -178,11 +219,17 @@ export const useCheckoutStore = create<CheckoutState>()((set, get) => {
           cardsError: null,
           selectedCardId: null,
           payError: null,
+          autoRetrying: false,
+          pendingPay: savedRequest(tripId),
           cardDisabled: false,
           result: null,
         });
       }
-      if (get().stage === "paid" || get().stage === "processing") return;
+      if (get().stage === "paid") return;
+      if (get().stage === "processing") {
+        if (!running) prepare();
+        return;
+      }
       if (method === "Cash") {
         stopLoops();
         set({ stage: "ready", prepareError: null });
@@ -218,20 +265,25 @@ export const useCheckoutStore = create<CheckoutState>()((set, get) => {
     },
 
     selectCard(cardId) {
+      if (get().stage === "processing" || get().pendingPay) return;
       set({ selectedCardId: cardId, payError: null });
     },
 
     addCard(card) {
+      if (get().stage === "processing" || get().pendingPay) return;
       set({ cards: withCard(get().cards ?? [], card), selectedCardId: card.cardId, payError: null });
     },
 
     async payByCard() {
       const { tripId, selectedCardId, stage } = get();
-      if (!tripId || !selectedCardId || stage !== "ready") return;
+      if (!tripId || (!selectedCardId && !get().pendingPay) || stage !== "ready") return;
+      const request = get().pendingPay ?? { requestId: crypto.randomUUID(), cardId: selectedCardId! };
+      rememberRequest(tripId, request);
+      inFlight = request.requestId;
       paymentMutation += 1;
-      set({ stage: "processing", payError: null });
+      set({ stage: "processing", payError: null, autoRetrying: false, pendingPay: request });
       try {
-        const r = await paymentService.pay(tripId, selectedCardId);
+        const r = await paymentService.pay(tripId, request.cardId, request.requestId);
         const c = r.confirmation;
         finishPaid({
           tripId,
@@ -244,14 +296,20 @@ export const useCheckoutStore = create<CheckoutState>()((set, get) => {
           paidAt: c.paidAt,
         });
       } catch (e) {
-        if (get().tripId !== tripId) return;
+        if (get().tripId !== tripId || get().stage === "paid") return;
         const code = isPaymentError(e) ? e.code : undefined;
         // The server may have committed even when the browser lost the response.
         // Keep Pay disabled until the authoritative status has been checked.
         const current = await paymentService.status(tripId).catch(() => null);
-        if (get().tripId !== tripId) return;
-        if (current && current.status !== "Pending") return apply(current);
-        set({ stage: "ready", payError: { title: errorMessage(e, "The payment didn't go through. Please try again."), code } });
+        if (get().tripId !== tripId || get().stage === "paid") return;
+        if (current && (current.status === "Paid" || current.status === "AwaitingCash")) return apply(current);
+        const terminal = isPaymentError(e) && (e.attempts !== undefined || [400, 403, 404].includes(e.status));
+        if (terminal) rememberRequest(tripId, null);
+        set({ stage: "ready", autoRetrying: false, pendingPay: terminal ? null : request, payError: {
+          title: terminal ? errorMessage(e, "The payment didn't go through. Please try again.") : "We couldn't confirm the payment. Check payment to safely resume it.",
+          code, retryable: isPaymentError(e) ? e.retryable : undefined,
+          autoRetried: isPaymentError(e) ? e.autoRetried : undefined, attempts: isPaymentError(e) ? e.attempts : undefined,
+        } });
         if (code === "CARD_NOT_FOUND") void get().loadCards();
         if (code === "CARD_DISABLED") set({ cardDisabled: true });
         // Paid or switched to cash elsewhere (another tab, a retry that did land): resync.
@@ -259,12 +317,15 @@ export const useCheckoutStore = create<CheckoutState>()((set, get) => {
           const st = await paymentService.status(tripId).catch(() => null);
           if (st) apply(st);
         }
+      } finally {
+        if (inFlight === request.requestId) inFlight = null;
+        paymentMutation += 1;
       }
     },
 
     payByCash() {
       const { tripId, stage, status, finalFare } = get();
-      if (!tripId || stage === "processing" || stage === "paid") return;
+      if (!tripId || stage === "processing" || stage === "paid" || get().pendingPay) return;
       paymentMutation += 1;
       finishPaid({
         tripId,

@@ -375,6 +375,13 @@ export interface PaymentStatusView {
   paidAt: string | null;
   cardBrand: string | null;
   cardLast4: string | null;
+  attemptCount: number;
+  lastFailureCode: string | null;
+  requestId: string | null;
+  requestState: "Processing" | "Retrying" | "Failed" | "Paid" | null;
+  requestAttempts: number;
+  autoRetried: boolean;
+  retryable: boolean;
 }
 
 export interface PaymentConfirmation {
@@ -400,6 +407,8 @@ export interface PayResult {
   status: "Paid";
   alreadyPaid: boolean;
   confirmation: PaymentConfirmation;
+  attempts: number;
+  autoRetried: boolean;
 }
 
 /** A trip payment goride-payment has settled, as the rider app shows it. */

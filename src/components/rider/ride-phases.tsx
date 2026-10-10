@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { AlertTriangle, ArrowLeft, Check, CreditCard, Flag, Info, LocateFixed, MapPinned, Plus, RefreshCw, ShieldCheck, Wallet, X } from "lucide-react";
 import type { FareEstimate, Place, Trip, VehicleType } from "@/types";
@@ -759,7 +760,7 @@ export function PaymentSheet({ trip, preference, busy, onSelectMockCash }: { tri
         <FieldLabel className="mb-2 mt-6">Payment method</FieldLabel>
         <div className="grid grid-cols-2 gap-2" role="group" aria-label="Payment method">
           {(["Card", "Cash"] as const).map((m) => {
-            const disabled = (m === "Card" && cardOff) || processing;
+            const disabled = (m === "Card" && cardOff) || processing || !!co.pendingPay;
             const active = payMethod === m;
             const description =
               m === "Cash"
@@ -831,15 +832,22 @@ export function PaymentSheet({ trip, preference, busy, onSelectMockCash }: { tri
                 className="rounded-card bg-white p-4 ring-1 ring-line"
                 title={cards.length === 0 ? "Add a card to pay" : "Add a card"}
                 submitLabel="Save and use this card"
-                disabled={processing}
+                disabled={processing || !!co.pendingPay}
                 onSaved={(card) => {
                   co.addCard(card);
                 }}
               />
             ) : (
-              <SavedCardPicker cards={cards} selectedId={co.selectedCardId} onSelect={co.selectCard} disabled={processing} />
+              <SavedCardPicker cards={cards} selectedId={co.selectedCardId} onSelect={co.selectCard} disabled={processing || !!co.pendingPay} />
             )}
-            {!co.cardDisabled && co.payError && !showForm && <InlineAlert className="mt-3">{co.payError.title}</InlineAlert>}
+            {processing && co.autoRetrying && (
+              <p className="mt-3 text-[13px] font-medium text-muted" role="status">Payment didn&apos;t go through, trying once more...</p>
+            )}
+            {!co.cardDisabled && co.payError && <InlineAlert className="mt-3">
+              {co.payError.title}
+              {co.payError.autoRetried && <span className="mt-1 block">We tried once more automatically.</span>}
+              {co.payError.retryable === false && <Link href="/rider/profile" className="mt-1 block underline">Use another card: replace your saved card in Payment methods.</Link>}
+            </InlineAlert>}
           </div>
         )}
 
@@ -865,8 +873,8 @@ export function PaymentSheet({ trip, preference, busy, onSelectMockCash }: { tri
     footer = (
       <PanelFooter>
         {payMethod === "Card" ? (
-          <Button size="lg" arrow loading={processing} loadingText="Processing payment…" disabled={!co.selectedCardId || showForm || stage !== "ready"} onClick={() => co.payByCard()}>
-            Pay {formatPaidAmount(amount)}
+          <Button size="lg" arrow loading={processing} loadingText={co.autoRetrying ? "Trying once more..." : "Processing payment…"} disabled={(!co.pendingPay && (!co.selectedCardId || showForm)) || stage !== "ready"} onClick={() => co.payByCard()}>
+            {co.pendingPay ? "Check payment" : co.payError ? "Retry payment" : <>Pay {formatPaidAmount(amount)}</>}
           </Button>
         ) : (
           <Button size="lg" arrow loading={!live && busy} disabled={live && stage !== "ready"} onClick={live ? () => co.payByCash() : onSelectMockCash}>

@@ -29,3 +29,35 @@ npm run build
 The Firebase values are harmless build placeholders, also defined in
 `.github/workflows/ci-reusable.yml`; no `.env` file or secrets are needed.
 `next typegen` supplies route types such as `LayoutProps` on a fresh checkout.
+
+## SCRUM-107 card retry
+
+Checkout sends `{ cardId, requestId }` to `POST /payments/{tripId}/pay`. A request ID
+is kept in memory and session storage until its outcome is known, including across
+reloads. After a lost response, **Check payment** reuses that ID and card token.
+After a confirmed decline, **Retry payment** creates a new ID. No amount is sent:
+the payment service charges its stored final fare and the receipt uses that result.
+
+The server retries a transient processing/timeout/5xx failure once, with a short
+backoff. Checkout continues polling while the POST runs and shows “Payment didn't
+go through, trying once more...” when `requestState` is `Retrying`. A hard decline
+does not retry automatically; its error links to Payment methods to replace the
+saved card. There is no automatic cash fallback.
+
+Status now includes `attemptCount`, `lastFailureCode`, `requestId`, `requestState`,
+`requestAttempts`, `autoRetried` and `retryable`. Successful pay results add
+`attempts` and `autoRetried`; decline ProblemDetails add `retryable`, `autoRetried`
+and `attempts`. The adapter preserves these fields for checkout. Double taps,
+stale polls, late failed responses and completion in another tab cannot reset a
+Paid checkout or start another request while its result is uncertain.
+
+For local testing, save `4000000000000341` to see an automatic retry succeed,
+`4000000000000119` to see two processing failures, or `4000000000000002` to see a
+hard decline. Use a future expiry and any three-digit CVC. These are GoRide demo
+behaviours; no real money moves. The payment service's SCRUM-107 schema/API must
+be deployed together with this checkout update.
+
+`npm test` exercises the checkout state machine, including retry progress,
+reload recovery, card replacement and stale responses. In a restricted Windows
+sandbox that blocks Node test-worker spawning, run it with
+`NODE_OPTIONS=--experimental-test-isolation=none`.
