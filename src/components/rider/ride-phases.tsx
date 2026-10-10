@@ -421,7 +421,7 @@ export function ReviewSheet({
         <div className="mt-6">
           <FieldLabel className="mb-2">Pay with</FieldLabel>
           <PayWithChips value={paymentPreference} onChange={onPaymentPreference} />
-          <p className="mt-2.5 text-xs leading-snug text-muted text-pretty">You pay after the trip ends. If a card is declined twice, the trip switches to cash.</p>
+          <p className="mt-2.5 text-xs leading-snug text-muted text-pretty">You pay after the trip ends. Your saved card is ready to use, or you can choose cash.</p>
         </div>
 
         {!emailVerified && (
@@ -721,14 +721,7 @@ export function PaymentSheet({ trip, preference, busy, onSelectMockCash }: { tri
   const co = useCheckoutStore();
   const mine = co.tripId === trip.id;
   const [method, setMethod] = React.useState<"Card" | "Cash">(p?.method ?? preference);
-  const [addingCard, setAddingCard] = React.useState(false);
   const first = trip.driver?.name.split(" ")[0] ?? "your driver";
-
-  // Starts (or resumes) the checkout for this trip; polling stops while the sheet is away.
-  React.useEffect(() => {
-    useCheckoutStore.getState().begin({ tripId: trip.id, live: isLiveRide(trip.id), finalFare });
-    return () => useCheckoutStore.getState().pause();
-  }, [trip.id, finalFare]);
 
   const stage: CheckoutStage = mine ? co.stage : "preparing";
   const live = mine && co.live;
@@ -738,10 +731,16 @@ export function PaymentSheet({ trip, preference, busy, onSelectMockCash }: { tri
   const inAppOff = mine && co.inAppUnavailable;
   const cardOff = mine && (co.cardDisabled || co.inAppUnavailable);
   const payMethod = cardOff ? "Cash" : method;
+  // Only card checkout prepares and polls a payment; cash stays local.
+  React.useEffect(() => {
+    useCheckoutStore.getState().begin({ tripId: trip.id, live: isLiveRide(trip.id), finalFare, method: payMethod });
+    return () => useCheckoutStore.getState().pause();
+  }, [trip.id, finalFare, payMethod]);
+
   // Cash on a simulated ride stays in the mock world, which marks it paid itself.
   const mockCashWaiting = !live && p?.method === "Cash" && p.status === "AwaitingCash";
   const failed = stage === "prepare_failed" && !inAppOff;
-  const showForm = !cardOff && !!cards && (addingCard || cards.length === 0);
+  const showForm = !cardOff && !!cards && cards.length === 0;
   const shownCard = cards?.find((c) => c.cardId === co.selectedCardId) ?? cards?.find((c) => c.isDefault) ?? null;
 
   let body: React.ReactNode;
@@ -760,7 +759,7 @@ export function PaymentSheet({ trip, preference, busy, onSelectMockCash }: { tri
         <FieldLabel className="mb-2 mt-6">Payment method</FieldLabel>
         <div className="grid grid-cols-2 gap-2" role="group" aria-label="Payment method">
           {(["Card", "Cash"] as const).map((m) => {
-            const disabled = (m === "Card" && cardOff) || processing || co.cashBusy;
+            const disabled = (m === "Card" && cardOff) || processing;
             const active = payMethod === m;
             const description =
               m === "Cash"
@@ -770,7 +769,7 @@ export function PaymentSheet({ trip, preference, busy, onSelectMockCash }: { tri
                     ? "Not available right now"
                     : "Disabled for this trip"
                   : !cards
-                    ? "Loading your cards…"
+                    ? payMethod === "Card" ? "Loading your cards…" : "Use your saved card"
                     : shownCard
                       ? cardLabel(shownCard.brand, shownCard.last4)
                       : "Add a card to pay";
@@ -812,17 +811,7 @@ export function PaymentSheet({ trip, preference, busy, onSelectMockCash }: { tri
           <div className="mt-5">
             {cards && cards.length > 0 && !showForm && (
               <div className="mb-2 flex items-center justify-between gap-3">
-                <FieldLabel>Your cards</FieldLabel>
-                {cards.length < 5 && (
-                  <button
-                    type="button"
-                    onClick={() => setAddingCard(true)}
-                    disabled={processing}
-                    className="inline-flex min-h-8 items-center gap-1 text-[13px] font-semibold text-brand-800 underline-offset-4 hover:underline disabled:opacity-50"
-                  >
-                    <Plus size={14} strokeWidth={2.5} /> Add a card
-                  </button>
-                )}
+                <FieldLabel>Your saved card</FieldLabel>
               </div>
             )}
             {co.cardsError ? (
@@ -842,12 +831,9 @@ export function PaymentSheet({ trip, preference, busy, onSelectMockCash }: { tri
                 className="rounded-card bg-white p-4 ring-1 ring-line"
                 title={cards.length === 0 ? "Add a card to pay" : "Add a card"}
                 submitLabel="Save and use this card"
-                defaultMakeDefault={cards.length === 0}
                 disabled={processing}
-                onCancel={cards.length > 0 ? () => setAddingCard(false) : undefined}
                 onSaved={(card) => {
                   co.addCard(card);
-                  setAddingCard(false);
                 }}
               />
             ) : (
@@ -857,10 +843,8 @@ export function PaymentSheet({ trip, preference, busy, onSelectMockCash }: { tri
           </div>
         )}
 
-        {payMethod === "Cash" && co.cashError && <InlineAlert className="mt-3">{co.cashError}</InlineAlert>}
-
         <p className="mt-4 text-center text-[11px] leading-snug text-muted text-pretty">
-          {payMethod === "Card" ? "Demo cards are charged in the app by GoRide Payments. Only the last four digits are ever shown." : "Hand the cash to your driver; they confirm it in their app."}
+          {payMethod === "Card" ? "Test payment. No real money is charged. Your receipt is emailed to your registered address." : "Hand the cash to your driver."}
         </p>
       </>
     );
@@ -872,11 +856,9 @@ export function PaymentSheet({ trip, preference, busy, onSelectMockCash }: { tri
         <Button size="lg" arrow arrowIcon={<RefreshCw strokeWidth={2.5} />} onClick={() => co.retryPrepare()}>
           Try again
         </Button>
-        {!live && (
-          <Button variant="ghost" loading={busy} onClick={onSelectMockCash}>
-            Pay {formatPaidAmount(finalFare)} in cash instead
-          </Button>
-        )}
+        <Button variant="ghost" loading={!live && busy} onClick={live ? () => co.payByCash() : onSelectMockCash}>
+          Pay {formatPaidAmount(finalFare)} in cash instead
+        </Button>
       </PanelFooter>
     );
   else if (!mockCashWaiting && (stage === "ready" || processing || inAppOff))
@@ -887,7 +869,7 @@ export function PaymentSheet({ trip, preference, busy, onSelectMockCash }: { tri
             Pay {formatPaidAmount(amount)}
           </Button>
         ) : (
-          <Button size="lg" arrow loading={live ? co.cashBusy : busy} disabled={live && stage !== "ready"} onClick={live ? () => co.payByCash() : onSelectMockCash}>
+          <Button size="lg" arrow loading={!live && busy} disabled={live && stage !== "ready"} onClick={live ? () => co.payByCash() : onSelectMockCash}>
             Pay {formatPaidAmount(amount)} in cash
           </Button>
         )}
@@ -952,7 +934,7 @@ export function PaidSheet({ trip, onRate, onDone, onReceipt }: { trip: Trip; onR
           {summary && (
             <motion.div key="summary" initial={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={fades.normal}>
               <PaymentSummaryCard summary={summary} className="mt-6">
-                <ReceiptStatus tripId={trip.id} />
+                {summary.method === "Card" && <ReceiptStatus tripId={trip.id} />}
               </PaymentSummaryCard>
             </motion.div>
           )}

@@ -1,6 +1,6 @@
 /**
  * Client for the real goride-payment service: the rider's saved demo cards, in-app card
- * checkout, cash, and the emailed receipt.
+ * checkout and the emailed receipt.
  *
  * Every path is relative (/payments/*) and goes through next.config.ts's rewrite, so the
  * calls are same-origin and the identity service's app_session cookie rides along — the
@@ -15,7 +15,6 @@ import type {
   PayResult,
   ReceiptView,
   SavedCard,
-  TestCard,
 } from "@/types";
 
 /** A failed payment-service call. `message` is the service's `title`, safe to show as is. */
@@ -65,6 +64,7 @@ async function call<T>(path: string, init: { method?: "GET" | "POST" | "DELETE";
       method: init.method ?? "GET",
       cache: "no-store",
       credentials: "same-origin",
+      signal: AbortSignal.timeout(20_000),
       headers: { Accept: "application/json", ...(hasBody ? { "Content-Type": "application/json" } : {}) },
       body: hasBody ? JSON.stringify(init.body) : undefined,
     });
@@ -112,11 +112,7 @@ export const paymentService = {
       const res = await call<{ cards: SavedCard[] }>("/cards");
       return res?.cards ?? [];
     },
-    async testCards(): Promise<TestCard[]> {
-      const res = await call<{ cards: TestCard[] }>("/cards/test-cards");
-      return res?.cards ?? [];
-    },
-    /** 400 CARD_* codes map to a field; 409 CARD_ALREADY_SAVED / CARD_LIMIT_REACHED (max 5). */
+    /** One manually saved card per account. */
     add(card: NewCardPayload): Promise<SavedCard> {
       return call("/cards", { method: "POST", body: card });
     },
@@ -144,16 +140,6 @@ export const paymentService = {
   /** Charges a saved card (~1.5 s). 402 codes are declines; an already-paid trip resolves with alreadyPaid. */
   pay(tripId: string, cardId: string): Promise<PayResult> {
     return call(`${trip(tripId)}/pay`, { method: "POST", body: { cardId } });
-  },
-
-  /** The rider pays the driver in cash; the payment waits in AwaitingCash for the driver. */
-  chooseCash(tripId: string): Promise<PaymentStatusView> {
-    return call(`${trip(tripId)}/cash`, { method: "POST", body: {} });
-  },
-
-  /** Driver only: the cash is in hand, so the trip is paid. */
-  confirmCash(tripId: string): Promise<PaymentStatusView> {
-    return call(`${trip(tripId)}/cash/confirm`, { method: "POST", body: {} });
   },
 
   confirmation(tripId: string): Promise<PaymentConfirmationView> {

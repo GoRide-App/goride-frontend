@@ -109,7 +109,7 @@ export function ReceiptStatus({ tripId, detailed, className }: { tripId: string;
   const status = receipt?.status;
   const resendable =
     !!receipt &&
-    (status === "Failed" || (detailed && status === "Sent")) &&
+    (status === "Failed" || status === "Logged" || (detailed && status === "Sent")) &&
     receipt.resendsLeft > 0 &&
     resendError?.code !== "RECEIPT_RESEND_LIMIT" &&
     (receipt.canResend || cooldownUntil != null);
@@ -135,6 +135,11 @@ export function ReceiptStatus({ tripId, detailed, className }: { tripId: string;
     tone = "bg-emerald-50 text-emerald-700";
     title = receipt?.recipient ? `Receipt sent to ${receipt.recipient}` : "Receipt sent";
     detail = receipt?.sentAt ? `Sent ${formatDateTime(receipt.sentAt)}` : null;
+  } else if (status === "Logged") {
+    icon = <MailX size={17} />;
+    tone = "bg-surface-3 text-muted";
+    title = "Receipt saved, email not sent";
+    detail = "Email delivery is not enabled. Your payment is complete.";
   } else if (status === "Failed") {
     icon = <MailX size={17} />;
     tone = "bg-red-50 text-danger";

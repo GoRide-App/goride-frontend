@@ -165,7 +165,7 @@ export function SavedCardRow({
           >
             <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl bg-red-50 px-3.5 py-3" role="group" aria-label={`Remove ${label}`}>
               <p className="min-w-0 flex-1 text-[13px] font-medium leading-snug text-red-700 text-pretty">
-                Remove this card?{card.isDefault ? " Your next card becomes the default." : ""}
+                Remove this card? You can add a replacement afterwards.
               </p>
               <div className="flex gap-2">
                 <Button size="sm" variant="white" full={false} onClick={() => setConfirming(false)} disabled={busy === "remove"}>

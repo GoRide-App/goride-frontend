@@ -57,7 +57,6 @@ interface DriverState {
   decline: () => Promise<void>;
   advance: (action: DriverTripAction) => Promise<boolean>;
   cancel: (reason: string) => Promise<boolean>;
-  confirmCash: () => Promise<boolean>;
   rateRider: (stars: number, comment?: string) => Promise<void>;
   triggerSos: () => Promise<void>;
   finishTrip: () => void;
@@ -261,7 +260,7 @@ export const useDriverStore = create<DriverState>()((set, get) => {
           if (sig !== lastTripToast) {
             lastTripToast = sig;
             if (t.status === "CANCELLED" && prev && prev.status !== "CANCELLED") toast.warning("Trip cancelled", t.cancellationReason ?? "The rider cancelled this trip.");
-            if (t.payment?.method === "Cash" && t.payment.status === "AwaitingCash" && prev?.payment?.status !== "AwaitingCash") toast.notify("Rider is paying cash", `Collect Rs ${t.payment.finalFare.toLocaleString()} and confirm.`);
+            if (t.payment?.method === "Cash" && t.payment.status === "AwaitingCash" && prev?.payment?.status !== "AwaitingCash") toast.notify("Rider is paying cash", `Collect Rs ${t.payment.finalFare.toLocaleString()} from the rider.`);
             if (t.payment?.status === "Paid" && prev?.payment?.status !== "Paid") toast.success(t.payment.method === "Card" ? "Card payment received" : "Cash confirmed", `Rs ${t.payment.finalFare.toLocaleString()} credited`);
           }
         } else if (prev && ["DRIVER_ASSIGNED", "DRIVER_EN_ROUTE", "DRIVER_ARRIVED", "TRIP_IN_PROGRESS"].includes(prev.status)) {
@@ -290,7 +289,7 @@ export const useDriverStore = create<DriverState>()((set, get) => {
       api.location.updateDriverLocation(st.driverId, st.location, st.location.heading, locationStatus(st)).catch(() => {});
     }, 30_000);
 
-    // Ride requests, the accepted trip's stage and its payment, from the real services.
+    // Ride requests and the accepted trip's stage, from the real trip service.
     startSync(driverId);
 
     if (IS_MOCK) {
@@ -351,6 +350,7 @@ export const useDriverStore = create<DriverState>()((set, get) => {
     try {
       const active = await getActiveOfferLive(driverId);
       if (!active || get().acceptingTripId) return;
+      if (get().driverId !== driverId) return;
       // Only a trip still underway comes back; a completed one is already finished for the driver.
       if (!ON_TRIP_STATUSES.includes(active.status)) return;
       if (get().acceptedOffer?.tripId === active.tripId) {
@@ -528,21 +528,6 @@ export const useDriverStore = create<DriverState>()((set, get) => {
     } catch (e) {
       set({ busy: false, error: errorMessage(e) });
       toast.error("Couldn't cancel", errorMessage(e));
-      return false;
-    }
-  },
-
-  async confirmCash() {
-    const t = get().trip;
-    if (!t) return false;
-    set({ busy: true, error: null });
-    try {
-      const payment = await api.payments.confirmCash(t.id);
-      set({ trip: { ...t, payment, status: "PAID" }, busy: false });
-      return true;
-    } catch (e) {
-      set({ busy: false, error: errorMessage(e) });
-      toast.error("Couldn't confirm cash", errorMessage(e));
       return false;
     }
   },

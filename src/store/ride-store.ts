@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { DriverLocation, FareEstimate, PaidOutcome, PaymentMethod, Place, Trip } from "@/types";
-import { api, errorMessage } from "@/lib/api";
+import { api, IS_MOCK, errorMessage } from "@/lib/api";
 import { ACTIVE_TRIP_STATUSES } from "@/lib/constants";
 import { toast } from "@/components/ui/toast";
 
@@ -80,7 +80,7 @@ interface RideState {
   refreshTrip: () => Promise<void>;
   /** Mock-world payment choice; only cash on a simulated ride still goes through here. */
   selectPayment: (m: PaymentMethod) => Promise<void>;
-  /** Marks the trip PAID after goride-payment settled it (card, or cash the driver confirmed). */
+  /** Marks the trip PAID after card settlement or a local cash choice. */
   settlePayment: (outcome: PaidOutcome) => Promise<void>;
   rate: (raterId: string, stars: number, comment?: string) => Promise<void>;
   triggerSos: (userId: string) => Promise<void>;
@@ -259,6 +259,19 @@ export const useRideStore = create<RideState>()(
       },
 
       async settlePayment(outcome) {
+        // Cash is local even when the rest of the app uses the HTTP adapter.
+        if (outcome.method === "Cash" && !IS_MOCK) {
+          const t = get().trip;
+          if (t?.id === outcome.tripId) {
+            set({ trip: {
+              ...t,
+              status: "PAID",
+              finalFare: outcome.amount,
+              payment: t.payment ? { ...t.payment, method: "Cash", status: "Paid", finalFare: outcome.amount, processedAt: outcome.paidAt } : t.payment,
+            } });
+          }
+          return;
+        }
         try {
           const payment = await api.payments.recordPayment(outcome.tripId, outcome);
           const t = get().trip;

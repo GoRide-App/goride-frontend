@@ -8,7 +8,9 @@
     "prebuild": "npm run verify",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "npm run test:payments",
+    "test:payments": "node --test tests/unit/payment-states.test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",

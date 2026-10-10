@@ -74,7 +74,7 @@ export default function RiderTripReceiptPage() {
               <span id="receipt-payment-title">Payment details</span>
             </SectionTitle>
             <PaymentSummaryCard summary={state.summary} className="bg-white shadow-card">
-              <ReceiptStatus tripId={tripId} detailed />
+              {state.summary.method === "Card" && <ReceiptStatus tripId={tripId} detailed />}
             </PaymentSummaryCard>
           </motion.section>
 

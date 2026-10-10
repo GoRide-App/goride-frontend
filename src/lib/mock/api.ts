@@ -800,18 +800,6 @@ export const mockApi: GoRideApi = {
       world().settleTrip(tripId, outcome);
       return world().get().payments.find((x) => x.tripId === tripId) ?? null;
     },
-    async confirmCash(tripId) {
-      await delay();
-      const p = world().get().payments.find((x) => x.tripId === tripId);
-      if (!p) throw err(404, "No payment exists for this trip yet.");
-      if (p.method !== "Cash") throw err(409, "The rider has not selected cash for this trip.", "NOT_CASH");
-      world().commit("payment.cash.confirm", (st) => {
-        const pay = st.payments.find((x) => x.tripId === tripId)!;
-        const tr = st.trips.find((x) => x.id === tripId)!;
-        world().markPaid(st, tr, pay);
-      });
-      return world().get().payments.find((x) => x.tripId === tripId)!;
-    },
     async dispute(tripId, raisedBy, reason) {
       await delay();
       const s = world().get();

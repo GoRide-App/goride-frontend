@@ -354,16 +354,6 @@ export interface SavedCard {
   createdAt: string;
 }
 
-export type TestCardBehaviour = "Succeeds" | "Declined" | "InsufficientFunds" | "ExpiredCard" | "IncorrectCvc" | "ProcessingError";
-
-/** A published demo card number and what charging it does. Real card numbers are rejected. */
-export interface TestCard {
-  number: string;
-  brand: string;
-  behaviour: TestCardBehaviour;
-  description: string;
-}
-
 export interface NewCardPayload {
   number: string;
   expMonth: number;
@@ -425,7 +415,7 @@ export interface PaidOutcome {
   paidAt: string | null;
 }
 
-export type ReceiptStatus = "Pending" | "Sending" | "Retry" | "Sent" | "Failed" | "NoEmail";
+export type ReceiptStatus = "Pending" | "Sending" | "Retry" | "Sent" | "Logged" | "Failed" | "NoEmail";
 
 /** The emailed receipt for a paid trip. `recipient` is masked, e.g. s***a@gmail.com. */
 export interface ReceiptView {

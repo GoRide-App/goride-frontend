@@ -16,7 +16,7 @@ import { SavedCardRow } from "./card-bits";
 import { AddCardForm } from "./card-form";
 
 /** The payment service keeps at most this many cards per rider (409 CARD_LIMIT_REACHED). */
-const MAX_CARDS = 5;
+const MAX_CARDS = 1;
 
 /**
  * Rider profile → Payment methods: the demo cards saved with goride-payment. The default card
@@ -104,7 +104,7 @@ export function PaymentMethodsSection() {
             <Lock size={17} />
           </span>
           <p className="text-[13px] leading-relaxed text-ink-2 text-pretty">
-            <span className="font-semibold text-ink">Pay for rides in the app.</span> Your default card is picked for you at the end of each trip. GoRide only ever shows the last four digits.
+            <span className="font-semibold text-ink">Pay for rides in the app.</span> Save one card now and use it after each trip. GoRide only ever shows the last four digits.
           </p>
         </div>
 
@@ -136,7 +136,7 @@ export function PaymentMethodsSection() {
             ))}
           </div>
         ) : cards.length === 0 && !adding ? (
-          <EmptyState icon={<CreditCard size={22} />} title="No cards saved yet" description="Add a demo card to pay for rides without handling cash." compact />
+          <EmptyState icon={<CreditCard size={22} />} title="No cards saved yet" description="Manually add your test card. It will be saved to your account for future rides." compact />
         ) : (
           <ul className="divide-y divide-line">
             <AnimatePresence initial={false}>
@@ -161,7 +161,6 @@ export function PaymentMethodsSection() {
             {adding ? (
               <AddCardForm
                 className="p-1"
-                defaultMakeDefault={cards.length === 0}
                 onCancel={() => setAdding(false)}
                 onSaved={(card) => {
                   setCards((prev) => withCard(prev ?? [], card));
@@ -169,10 +168,10 @@ export function PaymentMethodsSection() {
                   toast.success("Card saved", `${cardLabel(card.brand, card.last4)}${card.isDefault ? " is your default card." : " is ready to use."}`);
                 }}
               />
+            ) : full ? (
+              <p className="px-1 text-[13px] text-muted">Your card is saved. Remove it above to add a replacement.</p>
             ) : (
-              <Button variant={full ? "secondary" : "dark"} disabled={full} leftIcon={<Plus size={18} />} onClick={() => setAdding(true)}>
-                {full ? `Maximum of ${MAX_CARDS} cards saved` : "Add card"}
-              </Button>
+              <Button variant="dark" leftIcon={<Plus size={18} />} onClick={() => setAdding(true)}>Add card</Button>
             )}
           </div>
         )}
