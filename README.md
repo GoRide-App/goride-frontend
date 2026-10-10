@@ -61,3 +61,17 @@ be deployed together with this checkout update.
 reload recovery, card replacement and stale responses. In a restricted Windows
 sandbox that blocks Node test-worker spawning, run it with
 `NODE_OPTIONS=--experimental-test-isolation=none`.
+
+## Driver card-payment notices (SCRUM-106)
+
+While the signed-in driver is online, the driver shell polls `GET /payments/driver/notifications?since=<ISO timestamp>` every ten seconds and on focus/visibility return. Requests use the existing same-origin payment rewrite and session cookie. Polls do not overlap; offline/unmounted/account-changed responses are ignored. Trip completion releases the driver immediately, independently of card payment. Poll failures silently retry on the next round.
+
+The feed returns `{ notifications, nextCursor }`; each notification contains `tripId`, final paid `amount`, `currency`, `cardBrand`, `cardLast4` and `paidAt`. It is restricted to the authenticated trip driver. Pages contain at most 100 rows; the client follows `nextCursor` using `after`, retaining the same inclusive `since`. Every round rescans the last seven days so a late commit is not skipped. The backend also exposes `GET /payments/driver/notifications/{tripId}` (404 for absent or unowned trips). Invalid timestamps/cursors use structured `INVALID_SINCE`/`INVALID_CURSOR` errors; all requests require authentication.
+
+The existing notification toast shows `Card payment received: LKR <amount> for your trip to <destination>`. Destinations are saved from accepted trips because the payment service does not receive them from trip completion. After a device change or cleared storage, it falls back to the trip reference. Notices queue one at a time. Seen trip IDs and destinations live under `goride.driver-payments.v1.<mode>.<driverId>.*` in localStorage, separated by account and mock/live mode, so reloads do not repeat a trip's notice. If storage is blocked/full, memory dedupe lasts for the current page session; clearing storage can show recent notices again.
+
+Mock mode reads simulated rides' confirmed `Paid` card outcomes from the existing persisted mock world, using the final amount. Pending/failed/cash payments and other drivers' rides never produce this toast. It uses the same dedupe and queue; the previous mock card toast is removed to avoid duplicate notices.
+
+No new frontend environment variables or packages are required. The existing payment service rewrite configuration still applies. Backend deployment requires the re-runnable `driver_payment_notifications` table in payment's `schema.sql`. Its optional push dispatcher is configured with `Notification__BaseUrl`, `Notification__DriverPaymentPath`, optional `Notification__ApiKey`, `Notification__DispatcherEnabled` (default true), and `Notification__PollSeconds` (default 5). The notification reference service needs an idempotent driver card-payment receiver before HTTP dispatch can be enabled; polling works without that receiver. An unset backend URL records `Logged`, never delivered.
+
+Run `npm test` for payment-state and driver-notice unit tests. `tests/unit/driver-payment-notifications.test.mjs` covers repeat events, reloads, account/mode separation, unavailable storage, malformed data, and simulated final card outcomes. On Windows environments that deny Node child-process spawning, use `NODE_OPTIONS=--test-isolation=none` with `npm test` (Node 24). A fresh worktree may need `npx next typegen` before `npx tsc --noEmit` to generate Next's `LayoutProps` types; no install is needed.
