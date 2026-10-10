@@ -10,7 +10,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "npm run test:payments",
-    "test:payments": "node --test tests/unit/payment-states.test.mjs"
+    "test:payments": "node --test tests/unit/*.test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
