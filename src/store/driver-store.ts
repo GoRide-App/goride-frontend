@@ -261,7 +261,7 @@ export const useDriverStore = create<DriverState>()((set, get) => {
             lastTripToast = sig;
             if (t.status === "CANCELLED" && prev && prev.status !== "CANCELLED") toast.warning("Trip cancelled", t.cancellationReason ?? "The rider cancelled this trip.");
             if (t.payment?.method === "Cash" && t.payment.status === "AwaitingCash" && prev?.payment?.status !== "AwaitingCash") toast.notify("Rider is paying cash", `Collect Rs ${t.payment.finalFare.toLocaleString()} from the rider.`);
-            if (t.payment?.status === "Paid" && prev?.payment?.status !== "Paid") toast.success(t.payment.method === "Card" ? "Card payment received" : "Cash confirmed", `Rs ${t.payment.finalFare.toLocaleString()} credited`);
+            if (t.payment?.method === "Cash" && t.payment.status === "Paid" && prev?.payment?.status !== "Paid") toast.success("Cash confirmed", `Rs ${t.payment.finalFare.toLocaleString()} credited`);
           }
         } else if (prev && ["DRIVER_ASSIGNED", "DRIVER_EN_ROUTE", "DRIVER_ARRIVED", "TRIP_IN_PROGRESS"].includes(prev.status)) {
           // Trip left our active set (rider cancelled) — fetch the terminal state for the UI

@@ -16,6 +16,7 @@ import { springs } from "@/components/ui/motion";
 import { Avatar, Badge, RatingInline } from "@/components/ui/primitives";
 import { PinMark } from "@/components/ui/spinner";
 import { Toaster } from "@/components/ui/toast";
+import { DriverPaymentNotifications } from "@/components/driver/payment-notifications";
 import { InShellProvider, useShellHeader } from "./shell-header";
 
 interface NavItem {
@@ -98,6 +99,7 @@ export function AppShell({ user, variant = "page", className, children }: { user
   return (
     <div className={cn("flex h-dvh w-full overflow-hidden bg-surface-2 text-ink", items.length ? "[--tabbar-h:104px] md:[--tabbar-h:0px]" : "[--tabbar-h:0px]")}>
       <Toaster position="fixed" />
+      {role === "Driver" && user.id && <DriverPaymentNotifications driverId={user.id} />}
 
       {/* ---------------- Rail (md+) ---------------- */}
       <aside className="relative hidden h-full w-[84px] shrink-0 flex-col bg-navy-950 py-5 text-white shadow-rail md:flex lg:w-[248px]">

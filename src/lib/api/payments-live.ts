@@ -7,6 +7,7 @@
  * payment service works out the rider (or driver) from it. Errors come back as JSON
  * `{ status, title, code, ... }`: `title` is written for people, `code` is for branching.
  */
+import type { DriverPaymentNotification } from "@/lib/driver-payment-notifications";
 import type {
   NewCardPayload,
   PaidOutcome,
@@ -107,6 +108,12 @@ export function paidOutcomeFromStatus(st: PaymentStatusView): PaidOutcome {
 }
 
 export const paymentService = {
+  driverNotifications(since: string, after?: number): Promise<{ notifications: DriverPaymentNotification[]; nextCursor: number | null }> {
+    const query = new URLSearchParams({ since });
+    if (after !== undefined) query.set("after", String(after));
+    return call(`/driver/notifications?${query}`);
+  },
+
   cards: {
     async list(): Promise<SavedCard[]> {
       const res = await call<{ cards: SavedCard[] }>("/cards");
