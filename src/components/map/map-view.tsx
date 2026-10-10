@@ -3,16 +3,23 @@
 import "leaflet/dist/leaflet.css";
 import * as React from "react";
 import L from "leaflet";
-import { MapContainer, Marker, Polyline, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, Marker, Polyline, TileLayer, ZoomControl, useMap, useMapEvents } from "react-leaflet";
 import type { DriverLocation, LatLng, VehicleTypeCode } from "@/types";
 import { DEFAULT_CENTER, DEFAULT_ZOOM } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import { destinationIcon, pickupIcon, searchingIcon, sosIcon, stopIcon, userIcon, vehicleIcon } from "./icons";
+import { destinationIcon, pickupIcon, pinDropHtml, searchingIcon, sosIcon, stopIcon, userIcon, vehicleIcon } from "./icons";
 
-/* Light, label-sparse basemap that matches the theme's grey map texture. */
-const TILE_URL = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png";
-const TILE_URL_LABELS = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png";
-const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>';
+/*
+ * Basemap: Esri World Light Gray Canvas (base + reference labels). Keyless,
+ * quiet and warm-neutral, so a yellow route over charcoal markers is the
+ * loudest thing on the map. Native tiles stop at z16; Leaflet upsamples beyond.
+ */
+const TILE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}";
+const TILE_URL_LABELS = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}";
+const ATTRIBUTION = 'Tiles &copy; <a href="https://www.esri.com/">Esri</a>';
+
+const INK = "#111111";
+const YELLOW = "#FFC21A";
 
 export interface MapVehicle {
     id: string;
@@ -39,7 +46,14 @@ export interface MapViewProps {
     stops?: LatLng[];
     searching?: boolean;
     route?: LatLng[] | null;
+    /**
+     * `ink`: charcoal line with a yellow core (planned / en route).
+     * `brand`: confident yellow line with a charcoal casing (trip in progress).
+     * `muted`: quiet grey for history.
+     */
     routeTone?: "ink" | "brand" | "muted";
+    /** Dash the route while it is only a plan. */
+    routeDashed?: boolean;
     vehicles?: MapVehicle[];
     driver?: (DriverLocation & { code: VehicleTypeCode }) | null;
     sos?: LatLng[];
@@ -52,6 +66,8 @@ export interface MapViewProps {
     draggablePickup?: boolean;
     onPickupDragEnd?: (pos: LatLng) => void;
     interactive?: boolean;
+    /** Show the +/- zoom control (hidden on phones by CSS). Default true. */
+    zoomControl?: boolean;
     onReady?: (map: L.Map) => void;
     children?: React.ReactNode;
 }
@@ -100,6 +116,7 @@ function PinDropEvents({ onMove, onMoveStart }: { onMove?: (p: LatLng) => void; 
 function Ready({ onReady }: { onReady?: (m: L.Map) => void }) {
     const map = useMap();
     React.useEffect(() => {
+        map.attributionControl?.setPrefix(false);
         onReady?.(map);
         // Leaflet needs a nudge after mounting in flex layouts
         const t = setTimeout(() => map.invalidateSize(), 150);
@@ -134,6 +151,7 @@ export default function MapView({
     searching,
     route,
     routeTone = "ink",
+    routeDashed,
     vehicles = [],
     driver,
     sos = [],
@@ -144,11 +162,28 @@ export default function MapView({
     draggablePickup,
     onPickupDragEnd,
     interactive = true,
+    zoomControl = true,
     onReady,
     children,
 }: MapViewProps) {
     const initialCenter = center ?? pickup ?? user ?? DEFAULT_CENTER;
-    const routeColor = routeTone === "brand" ? "#22a03d" : routeTone === "muted" ? "#a1a1aa" : "#0a0a0a";
+    const positions = route && route.length > 1 ? route.map((p) => [p.lat, p.lng] as [number, number]) : null;
+    const dash = routeDashed ? "1 12" : undefined;
+
+    // Two-layer route: a casing underneath and the line on top.
+    const casing =
+        routeTone === "brand"
+            ? { color: INK, weight: 10, opacity: 0.9 }
+            : routeTone === "muted"
+              ? { color: "#ffffff", weight: 8, opacity: 0.9 }
+              : { color: "#ffffff", weight: 9, opacity: 0.95 };
+    const line =
+        routeTone === "brand"
+            ? { color: YELLOW, weight: 6, opacity: 1 }
+            : routeTone === "muted"
+              ? { color: "#a1a1a6", weight: 4, opacity: 0.9 }
+              : { color: INK, weight: 5, opacity: 0.95 };
+    const core = routeTone === "ink" ? { color: YELLOW, weight: 1.5, opacity: 0.95 } : null;
 
     return (
         <div className={cn("relative isolate z-0 h-full w-full", className)}>
@@ -164,18 +199,20 @@ export default function MapView({
                 className="h-full w-full"
                 preferCanvas
             >
-                <TileLayer url={TILE_URL} attribution={ATTRIBUTION} subdomains="abcd" maxZoom={19} />
-                <TileLayer url={TILE_URL_LABELS} subdomains="abcd" maxZoom={19} opacity={0.9} />
+                <TileLayer url={TILE_URL} attribution={ATTRIBUTION} maxNativeZoom={16} maxZoom={19} />
+                <TileLayer url={TILE_URL_LABELS} maxNativeZoom={16} maxZoom={19} opacity={0.95} />
+                {zoomControl && interactive && <ZoomControl position="topright" />}
                 <Ready onReady={onReady} />
                 <ResizeWatcher />
                 {center && !fitTo && <CenterOn center={center} zoom={zoom} />}
                 {fitTo && <FitBounds points={fitTo} padding={fitPadding} paddingBottom={paddingBottom} paddingTop={paddingTop} />}
                 {pinDrop && <PinDropEvents onMove={onPinMove} onMoveStart={onPinMoveStart} />}
 
-                {route && route.length > 1 && (
+                {positions && (
                     <>
-                        <Polyline positions={route.map((p) => [p.lat, p.lng] as [number, number])} pathOptions={{ color: "#ffffff", weight: 9, opacity: 0.9, lineCap: "round", lineJoin: "round" }} />
-                        <Polyline positions={route.map((p) => [p.lat, p.lng] as [number, number])} pathOptions={{ color: routeColor, weight: 5, opacity: 0.95, lineCap: "round", lineJoin: "round" }} />
+                        <Polyline positions={positions} pathOptions={{ ...casing, lineCap: "round", lineJoin: "round" }} />
+                        <Polyline positions={positions} pathOptions={{ ...line, dashArray: dash, lineCap: "round", lineJoin: "round" }} />
+                        {core && !routeDashed && <Polyline positions={positions} pathOptions={{ ...core, lineCap: "round", lineJoin: "round" }} />}
                     </>
                 )}
 
@@ -220,10 +257,9 @@ export default function MapView({
             {pinDrop && (
                 <div className="pointer-events-none absolute left-1/2 top-1/2 z-[401] -translate-x-1/2 -translate-y-full" aria-hidden>
                     <div className="flex flex-col items-center">
-                        <div className="rounded-lg bg-ink px-2.5 py-1 text-[11px] font-semibold text-white shadow-float">{pinLabel}</div>
-                        <div className="h-2 w-[3px] bg-ink" />
-                        <div className="h-7 w-7 rounded-full border-[5px] border-ink bg-white shadow-float" />
-                        <div className="-mt-1 h-2 w-2 rounded-full bg-black/30 blur-[1px]" />
+                        <div className="mb-1.5 whitespace-nowrap rounded-full bg-ink px-3 py-1.5 text-[11px] font-semibold text-white shadow-float">{pinLabel}</div>
+                        <div dangerouslySetInnerHTML={{ __html: pinDropHtml() }} />
+                        <div className="-mt-1 h-1.5 w-3 rounded-full bg-ink/30 blur-[1px]" />
                     </div>
                 </div>
             )}

@@ -2,8 +2,8 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { DriverLocation, FareEstimate, PaymentMethod, Place, Trip } from "@/types";
-import { api, errorMessage } from "@/lib/api";
+import type { DriverLocation, FareEstimate, PaidOutcome, PaymentMethod, Place, Trip } from "@/types";
+import { api, IS_MOCK, errorMessage } from "@/lib/api";
 import { ACTIVE_TRIP_STATUSES } from "@/lib/constants";
 import { toast } from "@/components/ui/toast";
 
@@ -78,8 +78,10 @@ interface RideState {
   retry: (vehicleTypeId?: string) => Promise<boolean>;
   restore: (riderId: string) => Promise<void>;
   refreshTrip: () => Promise<void>;
+  /** Mock-world payment choice; only cash on a simulated ride still goes through here. */
   selectPayment: (m: PaymentMethod) => Promise<void>;
-  payByCard: (forceFail?: boolean) => Promise<{ ok: boolean; message?: string; cardDisabled?: boolean }>;
+  /** Marks the trip PAID after card settlement or a local cash choice. */
+  settlePayment: (outcome: PaidOutcome) => Promise<void>;
   rate: (raterId: string, stars: number, comment?: string) => Promise<void>;
   triggerSos: (userId: string) => Promise<void>;
   finish: () => void;
@@ -256,19 +258,27 @@ export const useRideStore = create<RideState>()(
         }
       },
 
-      async payByCard(forceFail) {
-        const t = get().trip;
-        if (!t) return { ok: false };
-        set({ busy: true, error: null });
+      async settlePayment(outcome) {
+        // Cash is local even when the rest of the app uses the HTTP adapter.
+        if (outcome.method === "Cash" && !IS_MOCK) {
+          const t = get().trip;
+          if (t?.id === outcome.tripId) {
+            set({ trip: {
+              ...t,
+              status: "PAID",
+              finalFare: outcome.amount,
+              payment: t.payment ? { ...t.payment, method: "Cash", status: "Paid", finalFare: outcome.amount, processedAt: outcome.paidAt } : t.payment,
+            } });
+          }
+          return;
+        }
         try {
-          const payment = await api.payments.cardAttempt(t.id, { forceFail });
-          set({ trip: { ...t, payment, status: payment.status === "Paid" ? "PAID" : t.status }, busy: false });
-          return { ok: true };
+          const payment = await api.payments.recordPayment(outcome.tripId, outcome);
+          const t = get().trip;
+          // The trip subscription reports the change too; this just saves waiting for it.
+          if (t?.id === outcome.tripId && payment?.status === "Paid") set({ trip: { ...t, payment, status: "PAID", finalFare: payment.finalFare } });
         } catch (e) {
-          const err = e as { message?: string; code?: string; payment?: Trip["payment"] };
-          if (err.payment) set({ trip: { ...t, payment: err.payment } });
-          set({ busy: false });
-          return { ok: false, message: err.message, cardDisabled: err.code === "CARD_DISABLED" };
+          console.warn("[goride-payment] couldn't record the payment on the trip", e);
         }
       },
 

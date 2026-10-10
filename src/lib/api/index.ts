@@ -13,6 +13,7 @@ import type { FareEstimate, GoRideApi, Trip } from "./contract";
 import { httpApi } from "./http";
 import { mockApi } from "@/lib/mock/api";
 import {
+  isLiveTrip,
   resumeLiveRideRequest,
   startLiveRideRequest,
   type LiveMatchingDeps,
@@ -32,6 +33,14 @@ const LOCATION_API_URL =
 export const API_MODE: "mock" | "http" =
   process.env.NEXT_PUBLIC_API_MODE === "http" ? "http" : "mock";
 export const IS_MOCK = API_MODE === "mock";
+
+/**
+ * Whether a trip's driver came from the real trip service. Live rides are paid against the
+ * trip service's completion; simulated (demo-driver) rides report their own to goride-payment.
+ */
+export function isLiveRide(tripId: string) {
+  return !IS_MOCK || isLiveTrip(tripId);
+}
 
 export type {
   GoRideApi,

@@ -796,47 +796,9 @@ export const mockApi: GoRideApi = {
       });
       return world().get().payments.find((x) => x.tripId === tripId)!;
     },
-    async cardAttempt(tripId, opts) {
-      await delay(1400);
-      const p = world().get().payments.find((x) => x.tripId === tripId);
-      if (!p) throw err(404, "No payment exists for this trip yet.");
-      if (p.cardDisabled || p.cardAttemptCount >= 2) throw err(409, "Card payment is disabled after two failed attempts. Please pay in cash.", "CARD_DISABLED");
-      const fail = !!opts?.forceFail;
-      world().commit("payment.card", (st) => {
-        const pay = st.payments.find((x) => x.tripId === tripId)!;
-        const tr = st.trips.find((x) => x.id === tripId)!;
-        pay.method = "Card";
-        pay.cardAttemptCount += 1;
-        if (fail) {
-          pay.status = "Failed";
-          if (pay.cardAttemptCount >= 2) {
-            pay.cardDisabled = true;
-            pay.method = "Cash";
-            pay.status = "AwaitingCash";
-            pay.processedAt = new Date().toISOString();
-            world().notify(st, pay.riderId, "Card declined twice", "We've switched this trip to cash. Please pay your driver directly.", "payment.failed", tripId);
-            world().notify(st, pay.driverId, "Rider is paying cash", `Card failed twice — collect Rs ${pay.finalFare.toLocaleString()} in cash.`, "payment.cashSelected", tripId);
-          }
-          tr.payment = pay;
-        } else {
-          world().markPaid(st, tr, pay);
-        }
-      });
-      const out = world().get().payments.find((x) => x.tripId === tripId)!;
-      if (fail) throw Object.assign(err(402, out.cardDisabled ? "Card declined again. Card payment is now disabled for this trip — please pay cash." : "Your card was declined. We'll retry once automatically.", out.cardDisabled ? "CARD_DISABLED" : "CARD_DECLINED"), { payment: out });
-      return out;
-    },
-    async confirmCash(tripId) {
-      await delay();
-      const p = world().get().payments.find((x) => x.tripId === tripId);
-      if (!p) throw err(404, "No payment exists for this trip yet.");
-      if (p.method !== "Cash") throw err(409, "The rider has not selected cash for this trip.", "NOT_CASH");
-      world().commit("payment.cash.confirm", (st) => {
-        const pay = st.payments.find((x) => x.tripId === tripId)!;
-        const tr = st.trips.find((x) => x.id === tripId)!;
-        world().markPaid(st, tr, pay);
-      });
-      return world().get().payments.find((x) => x.tripId === tripId)!;
+    async recordPayment(tripId, outcome) {
+      world().settleTrip(tripId, outcome);
+      return world().get().payments.find((x) => x.tripId === tripId) ?? null;
     },
     async dispute(tripId, raisedBy, reason) {
       await delay();

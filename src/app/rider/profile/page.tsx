@@ -9,11 +9,14 @@ import {
   NotificationPrefsSection,
   ProfileScreen,
 } from "@/components/profile/profile-screen";
+import { ScreenError, ScreenLoader } from "@/components/dashboard/screen-loader";
+import { PaymentMethodsSection } from "@/components/payments/payment-methods-section";
+import { Button } from "@/components/ui/button";
 import { errorMessage, identity } from "@/lib/auth/identity-store";
 import { getMe } from "@/lib/api";
 import { identityLoginUrl, normalizeRole, ROUTES } from "@/lib/constants";
 
-/** Rider profile — FR-AUTH-04 / FR-AUTH-05 / FR-AUTH-07. */
+/** Rider profile — FR-AUTH-04 / FR-AUTH-05 / FR-AUTH-07, plus saved payment cards. */
 export default function RiderProfilePage() {
   const router = useRouter();
   const hydrated = useAuthStore((state) => state.hydrated);
@@ -69,18 +72,29 @@ export default function RiderProfilePage() {
       .finally(() => setLoading(false));
   }, [router, hydrated]);
 
-  if (loading) return <p>Loading...</p>;
-  if (error) return <p>{error}</p>;
+  if (loading) return <ScreenLoader inline label="Loading your profile…" />;
+  if (error)
+    return (
+      <ScreenError
+        inline
+        title="Couldn't load your profile"
+        message={error}
+        action={
+          <Button href={ROUTES.dashboard} variant="dark">
+            Back to dashboard
+          </Button>
+        }
+      />
+    );
   if (!user) return null;
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-0 sm:px-4">
-      <div className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-card">
-        <ProfileScreen user={user} tone="rider" title="Rider profile" phoneOnly>
-          <EmergencyContactsSection user={user} />
-          <NotificationPrefsSection user={user} />
-        </ProfileScreen>
-      </div>
+    <div className="mx-auto w-full max-w-[720px]">
+      <ProfileScreen user={user} tone="rider" title="Rider profile" phoneOnly>
+        <PaymentMethodsSection />
+        <EmergencyContactsSection user={user} />
+        <NotificationPrefsSection user={user} />
+      </ProfileScreen>
     </div>
   );
 }

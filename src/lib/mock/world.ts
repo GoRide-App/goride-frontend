@@ -17,10 +17,12 @@ import type {
   DriverLocation,
   DriverOffer,
   EmergencyContact,
+  FareBreakdown,
   LatLng,
   NotificationPreferences,
   Payment,
   PaymentDispute,
+  PaymentMethod,
   Rating,
   SosAlert,
   Trip,
@@ -83,6 +85,22 @@ const RANDOM_DRIVER_VEHICLES: Record<VehicleTypeCode, { make: string; model: str
 };
 
 const RANDOM_DRIVER_COLORS = ["White", "Silver", "Black", "Red", "Blue", "Green"];
+
+/** Rescales a fare breakdown to a different total, keeping its proportions and adding up exactly. */
+function scaleBreakdown(b: FareBreakdown, total: number): FareBreakdown {
+  const parts = ["base", "distance", "time", "stops", "waiting"] as const;
+  const sum = parts.reduce((a, k) => a + b[k], 0);
+  if (sum <= 0) return { base: total, distance: 0, time: 0, stops: 0, waiting: 0, total };
+  const out = { ...b, total };
+  let used = 0;
+  for (const k of parts) {
+    out[k] = Math.round((b[k] / sum) * total * 100) / 100;
+    used += out[k];
+  }
+  // Put the rounding remainder on the distance line so the rows still add up to the total.
+  out.distance = Math.round((out.distance + total - used) * 100) / 100;
+  return out;
+}
 
 interface TripSim {
   ownerTab: string;
@@ -483,37 +501,56 @@ class MockWorld {
   }
 
   /**
-   * Bridges from the real trip-matching backend into the mock trip -- the driver's own device
-   * called POST /matching/offers/{tripId}/status; the rider's side polls that same status and
-   * calls these so the rider's existing sheets (arrived + PIN, in-progress, completed) react to
-   * the driver's real actions instead of the local simulated timers.
+   * The real driver's name and position arrived after the assignment (they're looked up in
+   * the background so accepting never waits on them). A better position restarts the simulated
+   * drive to pickup from there, unless that leg's route is already being fetched.
    */
-  markLiveArrived(tripId: string) {
-    this.commit("trip.live.arrived", (s) => {
+  updateLiveDriver(tripId: string, driverId: string, info: { name?: string; location?: LatLng }) {
+    if (!info.name && !info.location) return;
+    this.commit("trip.live.driver", (s) => {
+      const d = s.drivers.find((x) => x.id === driverId);
+      if (d && info.name) d.name = info.name;
       const t = s.trips.find((x) => x.id === tripId);
-      if (!t || !["DRIVER_ASSIGNED", "DRIVER_EN_ROUTE"].includes(t.status)) return;
-      t.status = "DRIVER_ARRIVED";
-      t.arrivedAt = new Date().toISOString();
-      t.version += 1;
+      if (!t || t.driverId !== driverId) return;
+      if (d) t.driver = this.driverSummary(d);
       const sim = s.sim[tripId];
-      if (sim) sim.phase = "waiting";
-      this.notify(s, t.riderId, "Your driver has arrived", `${t.driver?.name ?? "Your driver"} is waiting at ${t.pickup.name}.`, "trip.driverArrived", tripId);
+      if (info.location && ["DRIVER_ASSIGNED", "DRIVER_EN_ROUTE"].includes(t.status) && sim?.phase === "toPickup" && !sim.loadingRoute) {
+        s.locations[driverId] = { driverId, lat: info.location.lat, lng: info.location.lng, heading: s.locations[driverId]?.heading ?? 0, status: "OnTrip", lastUpdated: new Date().toISOString() };
+        sim.route = undefined;
+        sim.moveStartedAt = undefined;
+      }
     });
   }
 
-  startLiveTrip(tripId: string) {
-    this.commit("trip.live.started", (s) => {
-      const t = s.trips.find((x) => x.id === tripId);
-      if (!t || t.status !== "DRIVER_ARRIVED") return;
-      this.startTrip(s, t, s.sim[tripId]);
-    });
-  }
+  /**
+   * Bridge from the real trip-matching backend into the mock trip: the driver's own device
+   * advances the trip (POST /matching/offers/{tripId}/status) and the rider's side polls it.
+   * A poll can miss a short stage, or the driver can be ahead of us (Accepted → InProgress, or
+   * straight to Completed), while each local transition only fires from its exact previous
+   * state — so every stage in between is applied in order, in one commit, and the rider's
+   * sheets land on the latest one instead of getting stuck. `fare` is the trip service's own
+   * fare, used as the final fare on completion.
+   */
+  advanceLiveTrip(tripId: string, target: "Arrived" | "InProgress" | "Completed", fare?: number | null) {
+    const rank = (status: Trip["status"]) =>
+      status === "DRIVER_ARRIVED" ? 1 : status === "TRIP_IN_PROGRESS" ? 2 : ["TRIP_COMPLETED", "PAYMENT_PENDING", "PAID", "CLOSED"].includes(status) ? 3 : 0;
+    const want = target === "Arrived" ? 1 : target === "InProgress" ? 2 : 3;
+    const current = this.get().trips.find((x) => x.id === tripId);
+    if (!current || current.status === "CANCELLED" || rank(current.status) >= want) return;
 
-  completeLiveTrip(tripId: string) {
-    this.commit("trip.live.completed", (s) => {
+    this.commit(`trip.live.${target}`, (s) => {
       const t = s.trips.find((x) => x.id === tripId);
-      if (!t || t.status !== "TRIP_IN_PROGRESS") return;
-      this.completeTrip(s, t, s.sim[tripId]);
+      if (!t) return;
+      const sim = s.sim[tripId];
+      if (t.status === "DRIVER_ASSIGNED" || t.status === "DRIVER_EN_ROUTE") {
+        t.status = "DRIVER_ARRIVED";
+        t.arrivedAt = new Date().toISOString();
+        t.version += 1;
+        if (sim) sim.phase = "waiting";
+        if (want === 1) this.notify(s, t.riderId, "Your driver has arrived", `${t.driver?.name ?? "Your driver"} is waiting at ${t.pickup.name}.`, "trip.driverArrived", tripId);
+      }
+      if (want >= 2 && t.status === "DRIVER_ARRIVED") this.startTrip(s, t, sim);
+      if (want >= 3 && t.status === "TRIP_IN_PROGRESS") this.completeTrip(s, t, sim, fare);
     });
   }
 
@@ -764,7 +801,11 @@ class MockWorld {
     this.notify(s, t.riderId, "Trip started", `Heading to ${t.destination.name}. Share your trip status from the SOS menu anytime.`, "trip.started", t.id);
   }
 
-  completeTrip(s: WorldState, t: Trip, sim?: TripSim) {
+  /**
+   * `fare` is the trip service's own fare for a live ride: that is what goride-payment will
+   * charge, so the rider's receipt uses it instead of the locally simulated final fare.
+   */
+  completeTrip(s: WorldState, t: Trip, sim?: TripSim, fare?: number | null) {
     t.status = "PAYMENT_PENDING";
     t.completedAt = new Date().toISOString();
     t.version += 1;
@@ -774,9 +815,10 @@ class MockWorld {
     const actualKm = Math.round((sm?.routeKm ?? t.distanceKm) * 10) / 10 || t.distanceKm;
     const actualMin = t.startedAt ? Math.max(t.durationMin * 0.9, (Date.now() - new Date(t.startedAt).getTime()) / 60000 + t.durationMin * 0.85) : t.durationMin;
     const est = t.estimatedFare ?? estimateFor(vt, t.distanceKm, t.durationMin, t.stops.length).total;
-    const breakdown = estimateFor(vt, Math.max(actualKm, t.distanceKm * 0.95), Math.round(actualMin), t.stops.length);
+    let breakdown = estimateFor(vt, Math.max(actualKm, t.distanceKm * 0.95), Math.round(actualMin), t.stops.length);
     // keep final within a believable band of the estimate
     breakdown.total = clamp(breakdown.total, Math.round(est * 0.95), Math.round(est * 1.12));
+    if (fare != null && fare > 0) breakdown = scaleBreakdown(breakdown, fare);
     t.finalFare = breakdown.total;
     const payment: Payment = {
       id: uid("pay"),
@@ -858,6 +900,28 @@ class MockWorld {
 
   /** Which driver (if any) this tab is "driving" for. Set by the driver store. */
   presenceOwner: string | null = null;
+
+  /**
+   * A payment settled by the real goride-payment service (card, or cash the driver confirmed
+   * in their app): record it on the mock trip through the same markPaid path as the simulated
+   * flow. `amount` is what was actually charged; `reference` becomes the receipt number.
+   */
+  settleTrip(tripId: string, outcome: { method: PaymentMethod; amount?: number | null; reference?: string | null; paidAt?: string | null }) {
+    this.commit("payment.settled", (s) => {
+      const t = s.trips.find((x) => x.id === tripId);
+      const p = s.payments.find((x) => x.tripId === tripId);
+      if (!t || !p || p.status === "Paid") return;
+      p.method = outcome.method;
+      if (outcome.amount != null && outcome.amount > 0 && outcome.amount !== p.finalFare) {
+        p.finalFare = outcome.amount;
+        p.breakdown = scaleBreakdown(p.breakdown, outcome.amount);
+        t.finalFare = outcome.amount;
+      }
+      if (outcome.reference) p.receiptNo = outcome.reference;
+      this.markPaid(s, t, p);
+      if (outcome.paidAt) p.processedAt = outcome.paidAt;
+    });
+  }
 
   markPaid(s: WorldState, t: Trip, p: Payment) {
     p.status = "Paid";

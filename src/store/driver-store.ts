@@ -6,7 +6,16 @@ import { api, IS_MOCK, errorMessage, type DriverTripAction } from "@/lib/api";
 import { world } from "@/lib/mock/world";
 import { bearing } from "@/lib/utils";
 import { getCurrentPosition } from "@/lib/geo/providers";
-import { acceptOfferLive, getPendingOffersLive, updateTripStatusLive, LiveMatchingError, type LiveDriverOffer, type TripStatusAction } from "@/lib/api/live-matching";
+import {
+  acceptOfferLive,
+  getActiveOfferLive,
+  getPendingOffersLive,
+  updateTripStatusLive,
+  LiveMatchingError,
+  ON_TRIP_STATUSES,
+  type LiveDriverOffer,
+  type TripStatusAction,
+} from "@/lib/api/live-matching";
 import { toast } from "@/components/ui/toast";
 
 interface DriverState {
@@ -21,9 +30,9 @@ interface DriverState {
   manualLocation: boolean;
   /** Ride requests from the real matching service waiting for this driver (polled while online). */
   liveOffers: LiveDriverOffer[];
-  /** The ride request this driver most recently accepted. */
+  /** The ride this driver accepted and is on (or just completed, until they tap Done). */
   acceptedOffer: LiveDriverOffer | null;
-  /** Trip id of the accept call in flight, if any. */
+  /** Trip id of the accept call in flight, if any (the trip card already shows, optimistically). */
   acceptingTripId: string | null;
   busy: boolean;
   error: string | null;
@@ -36,26 +45,48 @@ interface DriverState {
   setManualLocation: (pos: LatLng) => Promise<void>;
   /** Resume tracking from the device's real GPS position. */
   recenterGps: () => Promise<void>;
+  /** Picks up the driver's current live trip from the trip service (after a reload, or a DRIVER_BUSY). */
+  restoreLiveTrip: () => Promise<void>;
   /** Accept a ride request from the real matching service. Resolves true if this driver got the ride. */
   acceptLiveOffer: (tripId: string) => Promise<boolean>;
   /** Advance the accepted trip one stage (Arrived / InProgress / Completed). Resolves true on success. */
   advanceLiveTrip: (action: TripStatusAction) => Promise<boolean>;
+  /** Clears the finished trip. Refused only while it is still underway. */
   dismissAcceptedOffer: () => void;
   accept: () => Promise<boolean>;
   decline: () => Promise<void>;
   advance: (action: DriverTripAction) => Promise<boolean>;
   cancel: (reason: string) => Promise<boolean>;
-  confirmCash: () => Promise<boolean>;
   rateRider: (stars: number, comment?: string) => Promise<void>;
   triggerSos: () => Promise<void>;
   finishTrip: () => void;
   refresh: () => Promise<void>;
 }
 
+/**
+ * A driver is tied to their live trip only while driving it: no going offline, no new offers,
+ * status OnTrip. Once it is completed they can finish straight away; paying is the rider's side.
+ */
+export function liveTripLocked(st: Pick<DriverState, "acceptedOffer">) {
+  return !!st.acceptedOffer && ON_TRIP_STATUSES.includes(st.acceptedOffer.status);
+}
+
+/** What goride-location should hear: OnTrip while on a (mock or live) trip, else the toggle. */
+function locationStatus(st: Pick<DriverState, "trip" | "online" | "acceptedOffer">): DriverLocation["status"] {
+  return st.trip || liveTripLocked(st) ? "OnTrip" : st.online ? "Online" : "Offline";
+}
+
+/** One sync round every SYNC_MS, never overlapping: open offers, or the accepted trip's stage. */
+const SYNC_MS = 1500;
+/** 204s in a row before an in-progress trip the service no longer knows about is let go. */
+const ACTIVE_MISSES_TO_DROP = 3;
+
 let unsub: (() => void) | null = null;
 let heartbeat: ReturnType<typeof setInterval> | null = null;
 let locPoll: ReturnType<typeof setInterval> | null = null;
-let offerPoll: ReturnType<typeof setInterval> | null = null;
+let syncTimer: ReturnType<typeof setTimeout> | null = null;
+let syncToken = 0;
+let activeMisses = 0;
 let locHeartbeat: ReturnType<typeof setInterval> | null = null;
 let geoWatch: number | null = null;
 let lastOfferToast = "";
@@ -70,13 +101,92 @@ export const useDriverStore = create<DriverState>()((set, get) => {
         const heading = p.coords.heading ?? (last ? bearing(last, pos) : 0);
         last = pos;
         const st = get();
-        const status = st.trip ? "OnTrip" : st.online ? "Online" : "Offline";
+        const status = locationStatus(st);
         set({ location: { driverId, ...pos, heading, status, lastUpdated: new Date().toISOString() }, manualLocation: false });
-        if (st.online) api.location.updateDriverLocation(driverId, pos, heading, status).catch(() => {});
+        if (st.online || liveTripLocked(st)) api.location.updateDriverLocation(driverId, pos, heading, status).catch(() => {});
       },
       () => {},
       { enableHighAccuracy: true, maximumAge: 5000 },
     );
+  }
+
+  /** Re-sends the current position with the status the driver should have right now (e.g. OnTrip after accepting). */
+  function pushStatus() {
+    const st = get();
+    if (!st.driverId || !st.location) return;
+    const status = locationStatus(st);
+    if (st.location.status !== status) set({ location: { ...st.location, status } });
+    api.location.updateDriverLocation(st.driverId, st.location, st.location.heading, status).catch(() => {});
+  }
+
+  /** Swaps in a (new) accepted trip. */
+  function setAccepted(offer: LiveDriverOffer | null) {
+    activeMisses = 0;
+    set({ acceptedOffer: offer, ...(offer ? { liveOffers: [] } : {}) });
+  }
+
+  /** One round of the driver's live sync. Whatever it awaits, it re-checks state before writing. */
+  async function syncOnce(driverId: string) {
+    const st = get();
+    if (st.acceptingTripId) return; // the optimistic accept settles itself
+    const offer = st.acceptedOffer;
+
+    // Free to work: list the open ride requests (only an online driver is offered rides).
+    if (!offer) {
+      if (!st.online) {
+        if (st.liveOffers.length > 0) set({ liveOffers: [] });
+        return;
+      }
+      try {
+        const offers = await getPendingOffersLive(driverId);
+        if (!get().acceptedOffer && !get().acceptingTripId && get().online) set({ liveOffers: offers });
+      } catch {
+        /* service unreachable — keep whatever we last saw and try again */
+      }
+      return;
+    }
+
+    // Driving: keep the stage in step with the trip service.
+    if (ON_TRIP_STATUSES.includes(offer.status)) {
+      if (st.busy) return; // a stage change of our own is in flight
+      try {
+        const active = await getActiveOfferLive(driverId);
+        const now = get();
+        if (now.busy || now.acceptingTripId || now.acceptedOffer?.tripId !== offer.tripId) return;
+        if (!active) {
+          if (++activeMisses >= ACTIVE_MISSES_TO_DROP) {
+            setAccepted(null);
+            pushStatus();
+            toast.info("Trip ended", "This trip is no longer active on the trip service.");
+          }
+          return;
+        }
+        activeMisses = 0;
+        if (active.tripId !== offer.tripId || active.status !== offer.status) set({ acceptedOffer: active });
+      } catch {
+        /* unreachable, or an older trip service without /offers/active: try again next round */
+      }
+      return;
+    }
+    // Completed: nothing to sync; the trip card waits for the driver's Done.
+  }
+
+  function startSync(driverId: string) {
+    stopSync();
+    const token = syncToken;
+    const step = async () => {
+      if (token !== syncToken) return;
+      await syncOnce(driverId);
+      if (token !== syncToken) return;
+      syncTimer = setTimeout(step, SYNC_MS);
+    };
+    syncTimer = setTimeout(step, 0);
+  }
+
+  function stopSync() {
+    syncToken += 1;
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = null;
   }
 
   return {
@@ -96,13 +206,32 @@ export const useDriverStore = create<DriverState>()((set, get) => {
 
   async load(driverId) {
     set({ loading: true, driverId });
-    try {
-      const [driver, trip, offer, location] = await Promise.all([api.drivers.get(driverId), api.trips.activeForDriver(driverId), api.trips.currentOffer(driverId), api.location.getDriverLocation(driverId)]);
-      set({ driver, online: driver.profile.online, trip, offer, location, loading: false });
-      if (trip) lastTripToast = `${trip.id}|${trip.status}`;
-    } catch (e) {
-      set({ loading: false, error: errorMessage(e) });
-    }
+    // Independent of the mock-world lookups below, which reject for real (Asgardeo) drivers.
+    void get().restoreLiveTrip();
+    // Each lookup stands alone: the mock-world ones reject with "Driver not found" for real
+    // (Asgardeo) drivers, who aren't seeded there. That is expected, so it must not surface as
+    // an error or stop the location (and with it the online state) from loading.
+    const [driver, trip, offer, location] = await Promise.allSettled([
+      api.drivers.get(driverId),
+      api.trips.activeForDriver(driverId),
+      api.trips.currentOffer(driverId),
+      api.location.getDriverLocation(driverId),
+    ]);
+    const value = <T,>(r: PromiseSettledResult<T>) => (r.status === "fulfilled" ? r.value : null);
+    const mockDriver = value(driver);
+    const loc = value(location);
+    const activeTrip = value(trip);
+    set({
+      driver: mockDriver,
+      // Real drivers: goride-location's status is the source of truth (OnTrip counts as online).
+      online: mockDriver ? mockDriver.profile.online : loc?.status === "Online" || loc?.status === "OnTrip",
+      trip: activeTrip,
+      offer: value(offer),
+      location: loc,
+      loading: false,
+      error: null,
+    });
+    if (activeTrip) lastTripToast = `${activeTrip.id}|${activeTrip.status}`;
   },
 
   start(driverId) {
@@ -131,7 +260,7 @@ export const useDriverStore = create<DriverState>()((set, get) => {
           if (sig !== lastTripToast) {
             lastTripToast = sig;
             if (t.status === "CANCELLED" && prev && prev.status !== "CANCELLED") toast.warning("Trip cancelled", t.cancellationReason ?? "The rider cancelled this trip.");
-            if (t.payment?.method === "Cash" && t.payment.status === "AwaitingCash" && prev?.payment?.status !== "AwaitingCash") toast.notify("Rider is paying cash", `Collect Rs ${t.payment.finalFare.toLocaleString()} and confirm.`);
+            if (t.payment?.method === "Cash" && t.payment.status === "AwaitingCash" && prev?.payment?.status !== "AwaitingCash") toast.notify("Rider is paying cash", `Collect Rs ${t.payment.finalFare.toLocaleString()} from the rider.`);
             if (t.payment?.status === "Paid" && prev?.payment?.status !== "Paid") toast.success(t.payment.method === "Card" ? "Card payment received" : "Cash confirmed", `Rs ${t.payment.finalFare.toLocaleString()} credited`);
           }
         } else if (prev && ["DRIVER_ASSIGNED", "DRIVER_EN_ROUTE", "DRIVER_ARRIVED", "TRIP_IN_PROGRESS"].includes(prev.status)) {
@@ -153,28 +282,15 @@ export const useDriverStore = create<DriverState>()((set, get) => {
 
     // goride-location only treats a driver as available if their position was refreshed within
     // the last 2 minutes. GPS ticks do that in real mode, but the mock location source doesn't,
-    // so re-send the current position periodically while online.
+    // so re-send the current position periodically while online (or tied to a live trip).
     locHeartbeat = setInterval(() => {
       const st = get();
-      if (!st.online || !st.location || !st.driverId) return;
-      const status: DriverLocation["status"] = st.trip ? "OnTrip" : "Online";
-      api.location.updateDriverLocation(st.driverId, st.location, st.location.heading, status).catch(() => {});
+      if ((!st.online && !liveTripLocked(st)) || !st.location || !st.driverId) return;
+      api.location.updateDriverLocation(st.driverId, st.location, st.location.heading, locationStatus(st)).catch(() => {});
     }, 30_000);
 
-    // Ride requests from the real matching service. Only an online driver is offered rides.
-    offerPoll = setInterval(async () => {
-      const st = get();
-      if (!st.driverId) return;
-      if (!st.online) {
-        if (st.liveOffers.length > 0) set({ liveOffers: [] });
-        return;
-      }
-      try {
-        set({ liveOffers: await getPendingOffersLive(st.driverId) });
-      } catch {
-        /* service unreachable — keep whatever we last saw and try again */
-      }
-    }, 2000);
+    // Ride requests and the accepted trip's stage, from the real trip service.
+    startSync(driverId);
 
     if (IS_MOCK) {
       locPoll = setInterval(async () => {
@@ -191,10 +307,10 @@ export const useDriverStore = create<DriverState>()((set, get) => {
     unsub = null;
     if (heartbeat) clearInterval(heartbeat);
     if (locPoll) clearInterval(locPoll);
-    if (offerPoll) clearInterval(offerPoll);
     if (locHeartbeat) clearInterval(locHeartbeat);
+    stopSync();
     if (geoWatch != null && typeof navigator !== "undefined") navigator.geolocation.clearWatch(geoWatch);
-    heartbeat = locPoll = offerPoll = locHeartbeat = null;
+    heartbeat = locPoll = locHeartbeat = null;
     geoWatch = null;
     if (IS_MOCK) world().presenceOwner = null;
   },
@@ -206,8 +322,7 @@ export const useDriverStore = create<DriverState>()((set, get) => {
       navigator.geolocation.clearWatch(geoWatch);
       geoWatch = null;
     }
-    const st = get();
-    const status: DriverLocation["status"] = st.trip ? "OnTrip" : st.online ? "Online" : "Offline";
+    const status = locationStatus(get());
     set({ location: { driverId, ...pos, heading: 0, status, lastUpdated: new Date().toISOString() }, manualLocation: true });
     try {
       await api.location.updateDriverLocation(driverId, pos, 0, status);
@@ -220,8 +335,7 @@ export const useDriverStore = create<DriverState>()((set, get) => {
     const driverId = get().driverId;
     if (!driverId) return;
     const { pos } = await getCurrentPosition();
-    const st = get();
-    const status: DriverLocation["status"] = st.trip ? "OnTrip" : st.online ? "Online" : "Offline";
+    const status = locationStatus(get());
     set({ location: { driverId, ...pos, heading: 0, status, lastUpdated: new Date().toISOString() }, manualLocation: false });
     api.location.updateDriverLocation(driverId, pos, 0, status).catch(() => {});
     if (!IS_MOCK && typeof navigator !== "undefined" && navigator.geolocation) {
@@ -230,20 +344,56 @@ export const useDriverStore = create<DriverState>()((set, get) => {
     }
   },
 
-  async acceptLiveOffer(tripId) {
+  async restoreLiveTrip() {
     const driverId = get().driverId;
-    if (!driverId || get().acceptingTripId) return false;
-    set({ acceptingTripId: tripId });
+    if (!driverId) return;
     try {
-      const offer = await acceptOfferLive(tripId, driverId);
-      set({ acceptedOffer: offer, liveOffers: get().liveOffers.filter((o) => o.tripId !== tripId), acceptingTripId: null });
-      toast.success("Ride accepted", `Head to ${offer.pickupLocation ?? "the pickup point"}`);
+      const active = await getActiveOfferLive(driverId);
+      if (!active || get().acceptingTripId) return;
+      if (get().driverId !== driverId) return;
+      // Only a trip still underway comes back; a completed one is already finished for the driver.
+      if (!ON_TRIP_STATUSES.includes(active.status)) return;
+      if (get().acceptedOffer?.tripId === active.tripId) {
+        set({ acceptedOffer: active });
+        return;
+      }
+      setAccepted(active);
+      pushStatus();
+    } catch {
+      /* trip service unreachable (or without /offers/active yet): nothing to restore */
+    }
+  },
+
+  async acceptLiveOffer(tripId) {
+    const st = get();
+    const driverId = st.driverId;
+    if (!driverId || st.acceptingTripId || st.acceptedOffer) return false;
+    const offer = st.liveOffers.find((o) => o.tripId === tripId);
+    if (!offer) return false;
+
+    // Optimistic: the trip card replaces the request at once and rolls back if the service says no.
+    set({ acceptingTripId: tripId, liveOffers: st.liveOffers.filter((o) => o.tripId !== tripId), error: null });
+    setAccepted({ ...offer, status: "Accepted" });
+    pushStatus();
+    try {
+      const accepted = await acceptOfferLive(tripId, driverId);
+      set({ acceptingTripId: null });
+      setAccepted(accepted);
+      toast.success("Ride accepted", `Head to ${accepted.pickupLocation ?? "the pickup point"}`);
       return true;
     } catch (e) {
-      // 404/409 mean this offer is gone (expired or already decided) — drop it from the list.
-      const gone = e instanceof LiveMatchingError && (e.status === 404 || e.status === 409);
-      set({ acceptingTripId: null, liveOffers: gone ? get().liveOffers.filter((o) => o.tripId !== tripId) : get().liveOffers });
-      toast.error(gone ? "Too late" : "Couldn't accept the ride", errorMessage(e));
+      const driverBusy = e instanceof LiveMatchingError && e.code === "DRIVER_BUSY";
+      // 404/409 otherwise mean this offer is gone (expired or already decided).
+      const gone = !driverBusy && e instanceof LiveMatchingError && (e.status === 404 || e.status === 409);
+      set({ acceptingTripId: null, liveOffers: gone || driverBusy ? get().liveOffers : [offer, ...get().liveOffers.filter((o) => o.tripId !== tripId)] });
+      setAccepted(null);
+      pushStatus();
+      if (driverBusy) {
+        toast.error("You're already on a trip", "Finish your current trip before taking another.");
+        void get().restoreLiveTrip();
+      } else {
+        toast.error(gone ? "Too late" : "Couldn't accept the ride", errorMessage(e));
+      }
       return false;
     }
   },
@@ -251,11 +401,13 @@ export const useDriverStore = create<DriverState>()((set, get) => {
   async advanceLiveTrip(action) {
     const offer = get().acceptedOffer;
     const driverId = get().driverId;
-    if (!offer || !driverId) return false;
+    if (!offer || !driverId || get().acceptingTripId) return false;
     set({ busy: true, error: null });
     try {
       const updated = await updateTripStatusLive(offer.tripId, driverId, action);
       set({ acceptedOffer: updated, busy: false });
+      // Completing frees the driver at once, so goride-location hears Online/Offline again.
+      pushStatus();
       return true;
     } catch (e) {
       set({ busy: false, error: errorMessage(e) });
@@ -265,12 +417,18 @@ export const useDriverStore = create<DriverState>()((set, get) => {
   },
 
   dismissAcceptedOffer() {
-    set({ acceptedOffer: null });
+    if (liveTripLocked(get())) return;
+    setAccepted(null);
+    pushStatus();
   },
 
   async setOnline(online) {
     const driverId = get().driverId;
     if (!driverId) return false;
+    if (liveTripLocked(get())) {
+      toast.info("You're on a trip", "You can go offline once this trip is finished.");
+      return false;
+    }
     set({ busy: true, error: null });
 
     // Best-effort: mock-world bookkeeping, so seeded demo drivers keep their
@@ -295,7 +453,7 @@ export const useDriverStore = create<DriverState>()((set, get) => {
     // rather than waiting for the next GPS tick, using whatever position we
     // already have (or a fresh fix if we don't have one yet).
     let loc = get().location;
-    const status: DriverLocation["status"] = get().trip ? "OnTrip" : online ? "Online" : "Offline";
+    const status = locationStatus(get());
     if (!loc) {
       try {
         const { pos } = await getCurrentPosition();
@@ -370,21 +528,6 @@ export const useDriverStore = create<DriverState>()((set, get) => {
     } catch (e) {
       set({ busy: false, error: errorMessage(e) });
       toast.error("Couldn't cancel", errorMessage(e));
-      return false;
-    }
-  },
-
-  async confirmCash() {
-    const t = get().trip;
-    if (!t) return false;
-    set({ busy: true, error: null });
-    try {
-      const payment = await api.payments.confirmCash(t.id);
-      set({ trip: { ...t, payment, status: "PAID" }, busy: false });
-      return true;
-    } catch (e) {
-      set({ busy: false, error: errorMessage(e) });
-      toast.error("Couldn't confirm cash", errorMessage(e));
       return false;
     }
   },

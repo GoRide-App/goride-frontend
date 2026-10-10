@@ -336,6 +336,99 @@ export interface Payment {
   processedAt?: string | null;
 }
 
+/* ------------------------------------------------------------------ */
+/* Payment service (goride-payment): saved demo cards, in-app checkout  */
+/* ------------------------------------------------------------------ */
+
+export type CardBrand = "Visa" | "Mastercard";
+
+/** A card the rider saved with the payment service. Only the last four digits ever come back. */
+export interface SavedCard {
+  cardId: string;
+  brand: CardBrand;
+  last4: string;
+  expMonth: number;
+  expYear: number;
+  holderName: string | null;
+  isDefault: boolean;
+  createdAt: string;
+}
+
+export interface NewCardPayload {
+  number: string;
+  expMonth: number;
+  expYear: number;
+  cvc: string;
+  holderName?: string;
+  makeDefault?: boolean;
+}
+
+export type TripPaymentStatus = "Pending" | "AwaitingCash" | "Paid";
+
+/** What the rider and the driver both see about a trip's payment. */
+export interface PaymentStatusView {
+  tripId: string;
+  status: TripPaymentStatus;
+  method: PaymentMethod | null;
+  amount: number;
+  currency: "LKR";
+  paidAt: string | null;
+  cardBrand: string | null;
+  cardLast4: string | null;
+}
+
+export interface PaymentConfirmation {
+  confirmationId: string;
+  tripId: string;
+  amount: number;
+  currency: string;
+  method: string;
+  cardBrand: string | null;
+  cardLast4: string | null;
+  providerReference: string;
+  paidAt: string;
+  acknowledgedAt: string | null;
+}
+
+export interface PaymentConfirmationView {
+  status: "Confirmed" | "Pending";
+  confirmation: PaymentConfirmation | null;
+  lastProviderOutcome: string | null;
+}
+
+export interface PayResult {
+  status: "Paid";
+  alreadyPaid: boolean;
+  confirmation: PaymentConfirmation;
+}
+
+/** A trip payment goride-payment has settled, as the rider app shows it. */
+export interface PaidOutcome {
+  tripId: string;
+  method: PaymentMethod;
+  amount: number;
+  currency: string;
+  cardBrand: string | null;
+  cardLast4: string | null;
+  /** PayHere or demo provider reference; null for cash. */
+  reference: string | null;
+  paidAt: string | null;
+}
+
+export type ReceiptStatus = "Pending" | "Sending" | "Retry" | "Sent" | "Logged" | "Failed" | "NoEmail";
+
+/** The emailed receipt for a paid trip. `recipient` is masked, e.g. s***a@gmail.com. */
+export interface ReceiptView {
+  receiptId: string;
+  status: ReceiptStatus;
+  recipient: string | null;
+  sentAt: string | null;
+  attempts: number;
+  canResend: boolean;
+  resendAvailableAt: string | null;
+  resendsLeft: number;
+}
+
 export interface PaymentDispute {
   id: string;
   paymentId: string;

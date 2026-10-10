@@ -154,8 +154,11 @@ export interface GoRideApi {
   payments: {
     get(tripId: string): Promise<Payment | null>;
     selectMethod(tripId: string, method: PaymentMethod): Promise<Payment>;
-    cardAttempt(tripId: string, opts?: { forceFail?: boolean }): Promise<Payment>;
-    confirmCash(tripId: string): Promise<Payment>;
+    /**
+     * Records a completed checkout (a settled card payment, or cash chosen by the rider)
+     * on this trip, so the trip moves to PAID. Charging itself is never done here.
+     */
+    recordPayment(tripId: string, outcome: { method: PaymentMethod; amount?: number | null; reference?: string | null; paidAt?: string | null }): Promise<Payment | null>;
     dispute(tripId: string, raisedBy: string, reason: string): Promise<PaymentDispute>;
     listDisputes(): Promise<PaymentDispute[]>;
     resolveDispute(id: string, status: PaymentDispute["status"]): Promise<PaymentDispute>;
