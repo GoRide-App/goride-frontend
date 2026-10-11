@@ -8,6 +8,7 @@
  * `{ status, title, code, ... }`: `title` is written for people, `code` is for branching.
  */
 import type { DriverPaymentNotification } from "@/lib/driver-payment-notifications";
+import { fromPaymentTripIds, toPaymentTripId } from "./payment-trip";
 import type {
   NewCardPayload,
   PaidOutcome,
@@ -97,10 +98,10 @@ async function call<T>(path: string, init: { method?: "GET" | "POST" | "DELETE";
       typeof problem.attempts === "number" ? problem.attempts : undefined,
     );
   }
-  return data as T;
+  return fromPaymentTripIds(data as T);
 }
 
-const trip = (tripId: string) => `/${encodeURIComponent(tripId)}`;
+const trip = (tripId: string) => `/${encodeURIComponent(toPaymentTripId(tripId))}`;
 
 /** A Paid status as the app shows it (the provider reference comes from the confirmation). */
 export function paidOutcomeFromStatus(st: PaymentStatusView): PaidOutcome {
@@ -141,11 +142,11 @@ export const paymentService = {
   },
 
   /**
-   * Local demo only: creates the payable record for a SIMULATED ride (a demo driver the trip
+   * Creates the payable record for a SIMULATED ride (a demo driver the trip
    * service never saw). Idempotent per trip; 404 when the service has demo trips switched off.
    */
   async completeDemoTrip(tripId: string, finalFare: number): Promise<void> {
-    await call<unknown>("/demo-completions", { method: "POST", body: { tripId, finalFare: Math.round(finalFare * 100) / 100 } });
+    await call<unknown>("/demo-completions", { method: "POST", body: { tripId: toPaymentTripId(tripId), finalFare: Math.round(finalFare * 100) / 100 } });
   },
 
   /** JSON null until the completed trip has reached the payment service. Rider and driver. */

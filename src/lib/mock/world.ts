@@ -932,7 +932,9 @@ class MockWorld {
     t.version += 1;
     this.notify(s, t.riderId, "Payment received", `Rs ${p.finalFare.toLocaleString()} paid by ${p.method}. Receipt ${p.receiptNo} emailed to you.`, "payment.processed", t.id);
     this.notify(s, t.driverId!, p.method === "Card" ? "Card payment received" : "Cash confirmed", `Rs ${p.finalFare.toLocaleString()} for trip ${t.pickup.name} → ${t.destination.name}.`, "payment.processed", t.id);
-    delete s.sim[t.id];
+    // Keep live classification in persisted history so receipt/status calls after payment
+    // (or a reload in another tab) still use the real trip ID.
+    if (!s.sim[t.id]?.live) delete s.sim[t.id];
   }
 
   /* ------------------------------------------------------------ */

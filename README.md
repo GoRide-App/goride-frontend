@@ -30,6 +30,14 @@ The Firebase values are harmless build placeholders, also defined in
 `.github/workflows/ci-reusable.yml`; no `.env` file or secrets are needed.
 `next typegen` supplies route types such as `LayoutProps` on a fresh checkout.
 
+## Simulated ride payments on the live demo
+
+Simulated rides use `demo_` plus their original `trp_...` ID for every payment-service request, including completion, status, pay, confirmation and receipts. Responses restore the UI trip ID, including nested confirmations. Classification uses the existing browser live-trip state (`isLiveTrip`), so live rides keep their original IDs; HTTP mode remains live. The mapping is stable across polls, retries and reloads, and checkout keeps its existing request IDs and stale-response guards.
+
+On the payment service, `DemoTrips__Enabled` defaults to `false` (demo completion returns 404). The live Azure demo sets `DemoTrips__Enabled=true` in Production. `DemoTrips__MaxFare` defaults to `100000` LKR; demo fares must be positive, have at most two decimals and stay within this limit. These are backend environment variables; no frontend setting is needed.
+
+`POST /payments/demo-completions` accepts only IDs matching `^demo_trp_[A-Za-z0-9_-]{1,100}$`, covering both the UUID and base36 fallback generators. It takes rider identity from the session. Repeats with the same rider and fare are idempotent; a different rider or fare returns `DEMO_TRIP_CONFLICT` (409). The internal HTTP and Kafka completion paths reject all `demo_` IDs, keeping real trip completions in the trip service.
+
 ## SCRUM-107 card retry
 
 Checkout sends `{ cardId, requestId }` to `POST /payments/{tripId}/pay`. A request ID

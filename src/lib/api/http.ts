@@ -10,6 +10,7 @@
 import * as signalR from "@microsoft/signalr";
 import type { GoRideApi, TripEvent, Unsubscribe } from "./contract";
 import { getAccessToken } from "@/lib/auth/session";
+import { fromPaymentTripIds, toPaymentTripId } from "./payment-trip";
 
 const BASE = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080").replace(/\/$/, "");
 
@@ -41,6 +42,10 @@ function safeJson(t: string) {
   } catch {
     return { message: t };
   }
+}
+
+async function payment<T>(tripId: string, suffix = "", init: Parameters<typeof http>[1] = {}): Promise<T> {
+  return fromPaymentTripIds(await http<T>(`/payments/${encodeURIComponent(toPaymentTripId(tripId))}${suffix}`, init));
 }
 
 /* SignalR tracking hub — one connection, many subscriptions */
@@ -145,14 +150,14 @@ export const httpApi: GoRideApi = {
     subscribeDriver: (driverId, handler) => subscribeHub(`driver:${driverId}`, handler),
   },
   payments: {
-    get: (tripId) => http(`/payments/${tripId}`),
-    selectMethod: (tripId, method) => http(`/payments/${tripId}/select-method`, { method: "POST", json: { method } }),
+    get: (tripId) => payment(tripId),
+    selectMethod: (tripId, method) => payment(tripId, "/select-method", { method: "POST", json: { method } }),
     // The gateway's own payment record is already settled by goride-payment; just read it back.
-    recordPayment: (tripId) => http(`/payments/${tripId}`),
-    dispute: (tripId, raisedBy, reason) => http(`/payments/${tripId}/dispute`, { method: "POST", json: { raisedBy, reason } }),
-    listDisputes: () => http(`/payment-disputes`),
-    resolveDispute: (id, status) => http(`/payment-disputes/${id}`, { method: "PUT", json: { status } }),
-    list: (filter) => http(`/payments`, { query: filter }),
+    recordPayment: (tripId) => payment(tripId),
+    dispute: (tripId, raisedBy, reason) => payment(tripId, "/dispute", { method: "POST", json: { raisedBy, reason } }),
+    listDisputes: async () => fromPaymentTripIds(await http(`/payment-disputes`)),
+    resolveDispute: async (id, status) => fromPaymentTripIds(await http(`/payment-disputes/${id}`, { method: "PUT", json: { status } })),
+    list: async (filter) => fromPaymentTripIds(await http(`/payments`, { query: filter })),
     earnings: (driverId, period) => http(`/earnings/${driverId}/summary`, { query: { period } }),
   },
   admin: {
