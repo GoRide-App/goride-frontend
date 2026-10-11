@@ -6,11 +6,13 @@ import { NextRequest, NextResponse } from "next/server";
  * client-side RoleGuard alone can't prevent.
  *
  * Auth model:
- *  - The `goride_role` cookie is written by session.ts whenever a session is
- *    established or cleared. We read it here as a lightweight signal.
- *  - We intentionally do NOT treat the cookie as a trusted auth token — it is
- *    only used for routing decisions. The real session check happens inside
- *    each page via getMe() / the OIDC cookie the backend sets.
+ *  - `app_session` is the backend's real HttpOnly session cookie -- present
+ *    immediately after the OIDC callback, so it's what gates "is there a
+ *    session at all".
+ *  - `goride_role` is written by session.ts only after client JS has loaded
+ *    and called getMe(); it's used here only for the softer route-level
+ *    role restriction, and is treated as absent-is-fine (deferred to the
+ *    client-side RoleGuard) rather than a login gate.
  */
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";

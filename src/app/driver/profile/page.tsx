@@ -10,22 +10,19 @@ import { AppShell } from "@/components/layout/app-shell";
 import {
   EmergencyContactsSection,
   ProfileScreen,
+  ProfileSectionTitle,
 } from "@/components/profile/profile-screen";
+import { ScreenError, ScreenLoader } from "@/components/dashboard/screen-loader";
 import { errorMessage, identity } from "@/lib/auth/identity-store";
 import {
+  DRIVER_STATUS_META,
   identityLoginUrl,
   normalizeRole,
   ROUTES,
   VEHICLE_IMAGES,
   VEHICLE_TYPES,
 } from "@/lib/constants";
-import {
-  Badge,
-  Card,
-  SectionTitle,
-  Skeleton,
-  type Tone,
-} from "@/components/ui/primitives";
+import { Badge, Card, Skeleton } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { Input, Toggle } from "@/components/ui/field";
 import { toast } from "@/components/ui/toast";
@@ -100,8 +97,19 @@ export default function DriverProfilePage() {
       .finally(() => setLoading(false));
   }, [router, hydrated]);
 
-  if (loading) return <p>Loading...</p>;
-  if (error) return <p>{error}</p>;
+  if (loading) return <ScreenLoader label="Loading your profile…" />;
+  if (error)
+    return (
+      <ScreenError
+        title="Couldn't load your profile"
+        message={error}
+        action={
+          <Button href={ROUTES.dashboard} variant="dark">
+            Back to dashboard
+          </Button>
+        }
+      />
+    );
   if (!user) return null;
 
   if (!driverId) return null;
@@ -123,19 +131,12 @@ function DriverProfilePageInner({
         name: user.name,
         email: user.email,
       }}
-      className="max-w-3xl px-0 sm:px-4"
+      className="max-w-[720px]"
     >
-      <div className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-card">
-        <ProfileScreen
-          user={user}
-          tone="driver"
-          title="Driver profile"
-          phoneOnly
-        >
-          <VehicleSection driverId={driverId} />
-          <EmergencyContactsSection user={user} />
-        </ProfileScreen>
-      </div>
+      <ProfileScreen user={user} tone="driver" title="Driver profile" phoneOnly>
+        <VehicleSection driverId={driverId} />
+        <EmergencyContactsSection user={user} />
+      </ProfileScreen>
     </AppShell>
   );
 }
@@ -164,16 +165,6 @@ const vehicleSchema = z.object({
 });
 type VehicleValues = z.infer<typeof vehicleSchema>;
 
-const STATUS_TONE: Record<DriverProfile["status"], Tone> = {
-  PendingVerification: "warning",
-  DocumentReview: "info",
-  Active: "success",
-  Rejected: "danger",
-  Suspended: "danger",
-  Deactivated: "neutral",
-  Offline: "neutral",
-};
-
 function VehicleSection({ driverId }: { driverId: string }) {
   const [profile, setProfile] = React.useState<
     DriverProfile | null | undefined
@@ -199,52 +190,56 @@ function VehicleSection({ driverId }: { driverId: string }) {
     }
   };
 
-  if (profile === undefined) return <Skeleton className="mt-8 h-64" />;
+  if (profile === undefined) return <Skeleton className="h-64 rounded-card" />;
 
   if (profile === null)
     return (
-      <section className="mt-8">
-        <SectionTitle>Vehicle & licence</SectionTitle>
-        <VehicleForm
-          submitLabel="Register vehicle"
-          onSave={async (values) => {
-            const saved = await addDriverProfile(values);
-            setProfile({ ...saved, driverId });
-            return saved;
-          }}
-        />
+      <section aria-labelledby="profile-vehicle-title">
+        <ProfileSectionTitle id="profile-vehicle-title">Vehicle &amp; licence</ProfileSectionTitle>
+        <Card>
+          <p className="text-[13px] leading-relaxed text-muted text-pretty">
+            Register your vehicle and driving licence. An admin reviews them before you can go online.
+          </p>
+          <VehicleForm
+            className="mt-4"
+            submitLabel="Register vehicle"
+            onSave={async (values) => {
+              const saved = await addDriverProfile(values);
+              setProfile({ ...saved, driverId });
+              return saved;
+            }}
+          />
+        </Card>
       </section>
     );
 
+  const status = profile.status ?? "PendingVerification";
+  const statusMeta = DRIVER_STATUS_META[status] ?? DRIVER_STATUS_META.PendingVerification;
+
   return (
     <>
-      <section className="mt-8">
-        <SectionTitle>Verification</SectionTitle>
-        <Card className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+      <section aria-labelledby="profile-verification-title">
+        <ProfileSectionTitle id="profile-verification-title">Verification</ProfileSectionTitle>
+        <Card padded={false} className="divide-y divide-line">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-4">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold">Account status</p>
-              <p className="text-xs text-muted">
+              <p className="text-[15px] font-semibold leading-snug">Account status</p>
+              <p className="mt-0.5 text-[13px] leading-snug text-muted text-pretty">
                 {profile.verifiedAt
                   ? `Documents approved on ${formatDate(profile.verifiedAt)}`
                   : "An admin reviews your documents before you can go online."}
               </p>
             </div>
-            <Badge
-              tone={STATUS_TONE[profile.status ?? "PendingVerification"]}
-              dot
-            >
-              {String(profile.status ?? "PendingVerification")
-                .replace(/([A-Z])/g, " $1")
-                .trim()}
+            <Badge tone={statusMeta.tone} dot size="md">
+              {statusMeta.label}
             </Badge>
           </div>
-          <div className="border-t border-zinc-100 pt-3">
+          <div className="p-4">
             <Toggle
               checked={profile.online}
               onChange={toggleOnline}
               disabled={profile.status !== "Active"}
-              tone="driver"
+              tone="brand"
               label="Available for trips"
               description={
                 profile.status === "Active"
@@ -256,17 +251,19 @@ function VehicleSection({ driverId }: { driverId: string }) {
         </Card>
       </section>
 
-      <section className="mt-8">
-        <SectionTitle>Vehicle & licence</SectionTitle>
-        <VehicleForm
-          profile={profile}
-          submitLabel="Save vehicle details"
-          onSave={async (values) => {
-            const saved = await updateDriverProfile(driverId, values);
-            setProfile({ ...saved, driverId });
-            return saved;
-          }}
-        />
+      <section aria-labelledby="profile-vehicle-title">
+        <ProfileSectionTitle id="profile-vehicle-title">Vehicle &amp; licence</ProfileSectionTitle>
+        <Card>
+          <VehicleForm
+            profile={profile}
+            submitLabel="Save vehicle details"
+            onSave={async (values) => {
+              const saved = await updateDriverProfile(driverId, values);
+              setProfile({ ...saved, driverId });
+              return saved;
+            }}
+          />
+        </Card>
       </section>
     </>
   );
@@ -276,10 +273,12 @@ function VehicleForm({
   profile,
   submitLabel,
   onSave,
+  className,
 }: {
   profile?: DriverProfile;
   submitLabel: string;
   onSave: (values: DriverVehiclePayload) => Promise<DriverProfile>;
+  className?: string;
 }) {
   const {
     register,
@@ -330,63 +329,71 @@ function VehicleForm({
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
-      className="flex flex-col gap-4"
+      className={cn("flex flex-col gap-4", className)}
       noValidate
     >
-      <div>
-        <p className="mb-2 text-[13px] font-semibold">Vehicle type</p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {VEHICLE_TYPES.map((vehicleType) => (
-            <button
-              key={vehicleType.code}
-              type="button"
-              onClick={() =>
-                setValue("vehicleTypeCode", vehicleType.code, {
-                  shouldDirty: true,
-                  shouldValidate: true,
-                })
-              }
-              className={cn(
-                "flex flex-col items-center gap-1 rounded-xl border-2 bg-surface-2 p-2 transition",
-                selected === vehicleType.code
-                  ? "border-ink bg-white"
-                  : "border-transparent hover:border-zinc-300",
-              )}
-            >
-              <Image
-                src={VEHICLE_IMAGES[vehicleType.code]}
-                alt={vehicleType.name}
-                width={64}
-                height={40}
-                className="h-9 w-auto object-contain mix-blend-multiply"
-              />
-              <span className="text-[11px] font-semibold">
-                {vehicleType.name}
-              </span>
-            </button>
-          ))}
+      <fieldset>
+        <legend className="mb-2 text-[13px] font-semibold leading-none">Vehicle type</legend>
+        <div role="radiogroup" aria-label="Vehicle type" className="grid grid-cols-4 gap-2">
+          {VEHICLE_TYPES.map((vehicleType) => {
+            const active = selected === vehicleType.code;
+            return (
+              <button
+                key={vehicleType.code}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() =>
+                  setValue("vehicleTypeCode", vehicleType.code, {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  })
+                }
+                className={cn(
+                  "flex flex-col items-center gap-1.5 rounded-2xl p-2.5 pt-3 transition-[background-color,box-shadow,transform] duration-200 ease-(--ease-spring) active:scale-[0.97]",
+                  active
+                    ? "bg-brand-400 text-ink shadow-[0_6px_14px_-8px_rgba(255,194,26,0.9)]"
+                    : "bg-surface-2 text-ink hover:bg-surface-3",
+                )}
+              >
+                <Image
+                  src={VEHICLE_IMAGES[vehicleType.code]}
+                  alt=""
+                  width={64}
+                  height={40}
+                  className="h-9 w-auto object-contain"
+                />
+                <span className="text-[12px] font-semibold">
+                  {vehicleType.name}
+                </span>
+              </button>
+            );
+          })}
         </div>
-      </div>
+      </fieldset>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Input
           label="Make"
+          placeholder="Toyota"
           error={errors.vehicleMake?.message}
           {...register("vehicleMake")}
         />
         <Input
           label="Model"
+          placeholder="Aqua"
           error={errors.vehicleModel?.message}
           {...register("vehicleModel")}
         />
       </div>
       <Input
-        label="Registration no."
-        className="uppercase"
+        label="Registration number"
+        placeholder="CAB-1234"
+        className="uppercase placeholder:normal-case"
         error={errors.vehiclePlate?.message}
         {...register("vehiclePlate")}
       />
       <Input
-        label="Driving licence no."
+        label="Driving licence number"
         error={errors.licenseNumber?.message}
         {...register("licenseNumber")}
       />
@@ -398,8 +405,11 @@ function VehicleForm({
       />
       <Button
         type="submit"
-        variant="driver"
+        size="lg"
+        variant="dark"
+        className="mt-1"
         loading={isSubmitting}
+        loadingText="Saving…"
         disabled={profile ? !isDirty : false}
       >
         {submitLabel}

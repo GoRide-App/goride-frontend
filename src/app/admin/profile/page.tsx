@@ -1,12 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  CheckCircle2,
-  KeyRound,
-  MonitorSmartphone,
-  ShieldCheck,
-} from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/auth/session";
 import type { User } from "@/types";
@@ -14,11 +9,14 @@ import { AppShell } from "@/components/layout/app-shell";
 import {
   NotificationPrefsSection,
   ProfileScreen,
+  ProfileSectionTitle,
 } from "@/components/profile/profile-screen";
+import { ScreenError, ScreenLoader } from "@/components/dashboard/screen-loader";
 import { errorMessage, identity } from "@/lib/auth/identity-store";
 import { getMe } from "@/lib/api";
 import { identityLoginUrl, normalizeRole, ROUTES } from "@/lib/constants";
-import { Badge, Card, ListRow, SectionTitle } from "@/components/ui/primitives";
+import { Badge, Card } from "@/components/ui/primitives";
+import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
 
 const PERMISSIONS = [
@@ -88,87 +86,73 @@ export default function AdminProfilePage() {
       .finally(() => setLoading(false));
   }, [router, hydrated]);
 
-  if (loading) return <p>Loading...</p>;
-  if (error) return <p>{error}</p>;
+  if (loading) return <ScreenLoader label="Loading your profile…" />;
+  if (error)
+    return (
+      <ScreenError
+        title="Couldn't load your profile"
+        message={error}
+        action={
+          <Button href={ROUTES.dashboard} variant="dark">
+            Back to dashboard
+          </Button>
+        }
+      />
+    );
   if (!user) return null;
 
   return (
     <AppShell
       user={{ role: "Admin", name: user.name, email: user.email }}
-      className="max-w-3xl px-0 sm:px-4"
+      className="max-w-[720px]"
     >
-      <div className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-card">
-        <ProfileScreen
-          user={user}
-          tone="admin"
-          title="Admin profile"
-          allowDeactivate={false}
-          phoneOnly
-        >
-          <section className="mt-8">
-            <SectionTitle>Access</SectionTitle>
-            <Card className="flex flex-col gap-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold">
-                    Platform administrator
-                  </p>
-                  <p className="text-xs text-muted">
-                    Provisioned {formatDate(user.createdAt)}
-                  </p>
-                </div>
-                <Badge tone="ink" dot>
-                  Full access
-                </Badge>
+      <ProfileScreen
+        user={user}
+        tone="admin"
+        title="Admin profile"
+        allowDeactivate={false}
+        phoneOnly
+      >
+        <section aria-labelledby="profile-access-title">
+          <ProfileSectionTitle id="profile-access-title">Access</ProfileSectionTitle>
+          <Card padded={false} className="divide-y divide-line">
+            <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+              <div className="min-w-0 flex-1">
+                <p className="text-[15px] font-semibold leading-snug">
+                  Platform administrator
+                </p>
+                <p className="mt-0.5 text-[13px] leading-snug text-muted">
+                  Provisioned {formatDate(user.createdAt)}
+                </p>
               </div>
-              <ul className="flex flex-col gap-2 border-t border-zinc-100 pt-3">
-                {PERMISSIONS.map((p) => (
-                  <li
-                    key={p}
-                    className="flex items-start gap-2 text-xs text-zinc-600"
-                  >
-                    <CheckCircle2
-                      size={14}
-                      className="mt-0.5 shrink-0 text-brand-500"
-                    />
-                    {p}
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          </section>
-
-          <section className="mt-8">
-            <SectionTitle>Security</SectionTitle>
-            <Card className="divide-y divide-zinc-100 p-0">
-              <ListRow
-                icon={<KeyRound size={17} />}
-                title="Password"
-                description="Managed by GoRide ID — change it from the identity provider"
-                right={<Badge tone="neutral">GoRide ID</Badge>}
-              />
-              <ListRow
-                icon={<ShieldCheck size={17} />}
-                title="Two-factor authentication"
-                description="Required for every admin account"
-                right={<Badge tone="success">Enabled</Badge>}
-              />
-              <ListRow
-                icon={<MonitorSmartphone size={17} />}
-                title="Active sessions"
-                description="This browser only"
-                right={<Badge tone="neutral">1</Badge>}
-              />
-            </Card>
-            <p className="mt-3 text-[11px] text-muted">
+              <Badge tone="ink" dot size="md">
+                Full access
+              </Badge>
+            </div>
+            <ul className="flex flex-col gap-2.5 p-4">
+              {PERMISSIONS.map((p) => (
+                <li
+                  key={p}
+                  className="flex items-start gap-2.5 text-[13px] leading-snug text-ink-2"
+                >
+                  <CheckCircle2
+                    size={16}
+                    className="mt-px shrink-0 text-brand-700"
+                    aria-hidden
+                  />
+                  {p}
+                </li>
+              ))}
+            </ul>
+            <p className="p-4 text-[12px] leading-relaxed text-muted text-pretty">
               Every action taken from this account is written to the audit log
               with your admin ID.
             </p>
-          </section>
+          </Card>
+        </section>
 
-          <NotificationPrefsSection user={user} />
-        </ProfileScreen>
-      </div>
+        <NotificationPrefsSection user={user} />
+      </ProfileScreen>
     </AppShell>
   );
 }
