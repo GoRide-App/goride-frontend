@@ -444,6 +444,23 @@ class MockWorld {
     });
   }
 
+  /** Terminal outcome from the trip service; preserve live classification in history. */
+  endLiveTrip(tripId: string, outcome: "Cancelled" | "DriverCancelled" | "Expired", reason?: string) {
+    const current = this.get().trips.find((t) => t.id === tripId);
+    if (!current || current.status === "CANCELLED" || ["PAYMENT_PENDING", "PAID", "CLOSED"].includes(current.status)) return;
+    this.commit("trip.live.ended", (s) => {
+      const t = s.trips.find((x) => x.id === tripId)!;
+      t.cancellationFee = outcome === "Cancelled" && t.status === "DRIVER_ARRIVED" ? 100 : 0;
+      t.status = "CANCELLED";
+      t.liveOutcome = outcome;
+      t.cancelledBy = outcome === "DriverCancelled" ? "Driver" : outcome === "Expired" ? "System" : "Rider";
+      t.cancellationReason = reason ?? (outcome === "Expired" ? "The ride expired before it started" : null);
+      t.version += 1;
+      s.offers = s.offers.filter((o) => o.tripId !== tripId);
+      if (t.driverId && s.locations[t.driverId]) s.locations[t.driverId].status = "Online";
+    });
+  }
+
   /**
    * A real driver accepted: register them in the world (their id is not one of the seeded
    * demo drivers) and assign them. Assigned as a simulated driver so the drive to pickup (and

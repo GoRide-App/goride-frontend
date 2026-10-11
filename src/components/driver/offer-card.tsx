@@ -62,8 +62,7 @@ function RouteRow({ label, value }: { label: string; value: string }) {
 /**
  * An incoming ride request. Urgent but calm: the fare leads, the pickup and
  * drop-off read as a route, the ring counts down, and Accept is the one yellow
- * action. "Not now" hides the request on this screen; it still expires on its
- * own (the matching service has no decline call).
+ * action. Decline records the decision on the matching service.
  */
 export function OfferCard({
   offer,
@@ -131,11 +130,11 @@ export function OfferCard({
           size={acceptInFooter ? "sm" : "lg"}
           variant="ghost"
           full={false}
-          disabled={accepting}
+          disabled={disabled || accepting}
           onClick={onDismiss}
           className={cn("text-white hover:bg-white/10 active:bg-white/15 focus-visible:outline-brand-400", acceptInFooter ? "px-4" : "px-5")}
         >
-          Not now
+          Decline
         </Button>
       </div>
     </motion.article>

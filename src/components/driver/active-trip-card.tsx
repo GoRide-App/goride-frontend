@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { DRIVER_STAGES as STAGES, stageFor } from "@/lib/ride-lifecycle";
 import { ON_TRIP_STATUSES, type LiveDriverOffer, type TripStatusAction } from "@/lib/api/live-matching";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/primitives";
@@ -10,26 +11,7 @@ import { money } from "./offer-card";
 /** Statuses that mean "this driver has an accepted trip on their hands right now". */
 export const ACTIVE_OFFER_STATUSES = [...ON_TRIP_STATUSES, "Completed"];
 
-interface Stage {
-  status: string;
-  headline: string;
-  lede: string;
-  action: string;
-  next: TripStatusAction | null;
-}
-
-const STAGES: Stage[] = [
-  { status: "Accepted", headline: "Head to the pickup point", lede: "The rider is waiting. Follow the map to the pickup and tap below when you get there.", action: "I've arrived", next: "Arrived" },
-  { status: "Arrived", headline: "Waiting at pickup", lede: "Let the rider know you're here. Start the trip once they're in.", action: "Start trip", next: "InProgress" },
-  { status: "InProgress", headline: "Trip in progress", lede: "Follow the route to the drop-off and complete the trip when you arrive.", action: "Complete trip", next: "Completed" },
-  { status: "Completed", headline: "Trip completed", lede: "Nice work. Tap Done to finish and get back to new requests.", action: "Done", next: null },
-];
-
-export function stageFor(status: string) {
-  const i = STAGES.findIndex((s) => s.status === status);
-  const index = Math.max(0, i);
-  return { index, stage: STAGES[index] };
-}
+export { stageFor } from "@/lib/ride-lifecycle";
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
@@ -64,7 +46,9 @@ function RouteRows({ pickup, dropoff }: { pickup: string; dropoff: string }) {
  * the fare. The stage action itself lives in the panel footer (ActiveTripAction).
  */
 export function ActiveTripCard({ offer, error }: { offer: LiveDriverOffer; error?: string | null }) {
-  const { index, stage } = stageFor(offer.status);
+  const mapped = stageFor(offer.status);
+  if (!mapped) return null;
+  const { index, stage } = mapped;
   const done = offer.status === "Completed";
   const fare = money(offer.fare);
   return (
@@ -99,6 +83,7 @@ export function ActiveTripAction({
   confirming,
   onAdvance,
   onDone,
+  onCancel,
 }: {
   offer: LiveDriverOffer;
   busy: boolean;
@@ -106,18 +91,28 @@ export function ActiveTripAction({
   confirming?: boolean;
   onAdvance: (action: TripStatusAction) => void;
   onDone: () => void;
+  onCancel: () => void;
 }) {
-  const { stage } = stageFor(offer.status);
+  const mapped = stageFor(offer.status);
+  if (!mapped) return null;
+  const { stage } = mapped;
   const next = stage.next;
   if (!next)
     return (
-      <Button size="lg" variant="dark" onClick={onDone}>
+      <Button size="lg" variant="dark" disabled={busy || confirming} onClick={onDone}>
         Done
       </Button>
     );
   return (
-    <Button size="lg" variant="primary" arrow loading={busy || confirming} loadingText={confirming ? "Confirming ride…" : undefined} onClick={() => onAdvance(next)}>
-      {stage.action}
-    </Button>
+    <div className="flex flex-col gap-2">
+      <Button size="lg" variant="primary" arrow disabled={busy || confirming} loading={busy || confirming} loadingText={confirming ? "Confirming ride…" : undefined} onClick={() => onAdvance(next)}>
+        {stage.action}
+      </Button>
+      {["Accepted", "Arrived"].includes(offer.status) && (
+        <Button variant="ghost" disabled={busy || confirming} onClick={() => {
+          if (window.confirm("Cancel this trip? The rider will need to request another ride.")) onCancel();
+        }}>Cancel trip</Button>
+      )}
+    </div>
   );
 }

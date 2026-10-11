@@ -51,11 +51,11 @@ function useNow(ms: number, enabled = true) {
 
 /**
  * Ride requests the real matching service has offered this driver (polled by the
- * store while online). "Not now" only hides a request on this screen; the service
- * has no decline call, so the offer simply expires on its own.
+ * store while online). Decline records the decision on the trip service.
  */
 function RideRequests({ offers, now, near, onDismiss, acceptInFooter }: { offers: LiveDriverOffer[]; now: number; near: string | null; onDismiss: (tripId: string) => void; acceptInFooter: boolean }) {
     const acceptingTripId = useDriverStore((s) => s.acceptingTripId);
+    const actionBusy = useDriverStore((s) => s.busy || s.restoringLiveTrip);
 
     return (
         <div className="flex flex-col gap-3" aria-live="polite">
@@ -73,7 +73,7 @@ function RideRequests({ offers, now, near, onDismiss, acceptInFooter }: { offers
                                 offer={o}
                                 secondsLeft={secondsLeft}
                                 accepting={acceptingTripId === o.tripId}
-                                disabled={acceptingTripId !== null}
+                                disabled={actionBusy || acceptingTripId !== null}
                                 onAccept={() => useDriverStore.getState().acceptLiveOffer(o.tripId)}
                                 onDismiss={() => onDismiss(o.tripId)}
                                 acceptInFooter={acceptInFooter}
@@ -90,12 +90,12 @@ function DriverMap({ driverId, name }: { driverId: string; name: string }) {
     const online = useDriverStore((s) => s.online);
     const location = useDriverStore((s) => s.location);
     const manualLocation = useDriverStore((s) => s.manualLocation);
-    const busy = useDriverStore((s) => s.busy);
     const error = useDriverStore((s) => s.error);
     const driver = useDriverStore((s) => s.driver);
     const acceptedOffer = useDriverStore((s) => s.acceptedOffer);
     const liveOffers = useDriverStore((s) => s.liveOffers);
     const acceptingTripId = useDriverStore((s) => s.acceptingTripId);
+    const actionBusy = useDriverStore((s) => s.busy || s.restoringLiveTrip);
     // While a live trip is underway the toggle and new offers wait (see liveTripLocked).
     const locked = liveTripLocked({ acceptedOffer });
     const mobile = useIsMobile();
@@ -117,14 +117,13 @@ function DriverMap({ driverId, name }: { driverId: string; name: string }) {
         [activeDropoffLat, activeDropoffLng],
     );
 
-    // Open offers: not yet expired and not hidden with "Not now". Ticks only while there is something to count down.
+    // Open offers: not yet expired and still pending. Ticks only while there is something to count down.
     const now = useNow(1000, online && liveOffers.length > 0);
-    const [dismissed, setDismissed] = React.useState<string[]>([]);
     const openOffers = React.useMemo(
-        () => (online ? liveOffers.filter((o) => new Date(o.expiresAt).getTime() > now && !dismissed.includes(o.tripId)) : []),
-        [online, liveOffers, now, dismissed],
+        () => (online ? liveOffers.filter((o) => new Date(o.expiresAt).getTime() > now) : []),
+        [online, liveOffers, now],
     );
-    const dismissOffer = React.useCallback((tripId: string) => setDismissed((d) => [...d, tripId]), []);
+    const dismissOffer = (tripId: string) => { void useDriverStore.getState().declineLiveOffer(tripId); };
 
     const [locating, setLocating] = React.useState(false);
     const [pinDrop, setPinDrop] = React.useState(false);
@@ -285,7 +284,7 @@ function DriverMap({ driverId, name }: { driverId: string; name: string }) {
                                 <GoOnlineCard
                                     compact={compactOnline}
                                     online={online}
-                                    busy={busy && !activeOffer}
+                                    busy={actionBusy}
                                     name={firstName}
                                     vehicle={vehicle}
                                     lockedReason={locked ? "You can go offline once this trip is finished." : null}
@@ -306,9 +305,10 @@ function DriverMap({ driverId, name }: { driverId: string; name: string }) {
                         <PanelFooter>
                             <ActiveTripAction
                                 offer={activeOffer}
-                                busy={busy}
+                                busy={actionBusy}
                                 confirming={acceptingTripId === activeOffer.tripId}
                                 onAdvance={(action) => useDriverStore.getState().advanceLiveTrip(action)}
+                                onCancel={() => useDriverStore.getState().cancelLiveTrip()}
                                 onDone={() => useDriverStore.getState().dismissAcceptedOffer()}
                             />
                         </PanelFooter>
@@ -322,7 +322,7 @@ function DriverMap({ driverId, name }: { driverId: string; name: string }) {
                                     arrowIcon={<Check strokeWidth={3} />}
                                     loading={acceptingTripId === footerOffer.tripId}
                                     loadingText="Accepting…"
-                                    disabled={acceptingTripId !== null}
+                                    disabled={actionBusy || acceptingTripId !== null}
                                     onClick={() => useDriverStore.getState().acceptLiveOffer(footerOffer.tripId)}
                                 >
                                     Accept ride{money(footerOffer.fare) ? ` · ${money(footerOffer.fare)}` : ""}

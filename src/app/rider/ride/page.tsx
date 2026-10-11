@@ -243,10 +243,8 @@ export default function RiderRidePage() {
     s.finish();
     router.replace(ROUTES.rider.home);
   };
-  const bookAgain = () => {
-    s.finish();
-    setActiveField("destination");
-    locate();
+  const bookAgain = async () => {
+    if (!await s.retry()) toast.error("Couldn't request again", useRideStore.getState().error ?? "Please try again.");
   };
 
   const showSos = ["en_route", "arrived", "in_progress"].includes(phase);
@@ -394,7 +392,7 @@ export default function RiderRidePage() {
                 />
               )}
               {trip && (phase === "en_route" || phase === "arrived") && (
-                <EnRouteSheet trip={trip} etaMin={etaToPickup} arrived={phase === "arrived"} onCancel={() => setCancelOpen(true)} />
+                <EnRouteSheet trip={trip} etaMin={etaToPickup} arrived={phase === "arrived"} busy={s.busy} onCancel={() => setCancelOpen(true)} />
               )}
               {trip && phase === "in_progress" && <InProgressSheet trip={trip} etaMin={etaToDest} remainingKm={remainingKm} onCancelWithComplaint={() => setCancelOpen(true)} />}
               {trip && phase === "payment" && (
@@ -413,7 +411,7 @@ export default function RiderRidePage() {
                   }}
                 />
               )}
-              {trip && phase === "cancelled" && <CancelledSheet trip={trip} onAgain={bookAgain} onHome={goHome} />}
+              {trip && phase === "cancelled" && <CancelledSheet trip={trip} busy={s.busy} onAgain={bookAgain} onHome={goHome} />}
             </>
           )}
         </motion.div>

@@ -567,7 +567,7 @@ export function NoDriverSheet({ trip, vehicleTypes, estimates, onRetry, onRetryW
 /* 5. Driver en route / arrived — FR-PICK-02..04                         */
 /* ------------------------------------------------------------------ */
 
-export function EnRouteSheet({ trip, etaMin, onCancel, arrived }: { trip: Trip; etaMin: number | null; onCancel: () => void; arrived?: boolean }) {
+export function EnRouteSheet({ trip, etaMin, onCancel, arrived, busy }: { trip: Trip; etaMin: number | null; onCancel: () => void; arrived?: boolean; busy?: boolean }) {
   const reduce = useReducedMotion();
   if (!trip.driver) return null;
   const first = trip.driver.name.split(" ")[0];
@@ -615,7 +615,7 @@ export function EnRouteSheet({ trip, etaMin, onCancel, arrived }: { trip: Trip; 
         <FareRow label="Estimated fare" value={formatLKR(trip.estimatedFare)} className="mt-3" />
       </PanelBody>
       <PanelFooter>
-        <Button size="lg" variant="outline" onClick={onCancel}>
+        <Button size="lg" variant="outline" disabled={busy} onClick={onCancel}>
           Cancel ride
         </Button>
       </PanelFooter>
@@ -650,11 +650,11 @@ export function InProgressSheet({ trip, etaMin, remainingKm, onCancelWithComplai
         <TripRoute trip={trip} compact className="mt-4" />
         <FareRow label="Estimated fare" value={formatLKR(trip.estimatedFare)} className="mt-3" />
       </PanelBody>
-      <PanelFooter>
+      {!isLiveRide(trip.id) && <PanelFooter>
         <Button variant="ghost" leftIcon={<Flag size={16} />} onClick={onCancelWithComplaint} className="text-muted hover:text-ink">
           End trip early and file a complaint
         </Button>
-      </PanelFooter>
+      </PanelFooter>}
     </>
   );
 }
@@ -1001,7 +1001,7 @@ export function PaidSheet({ trip, onRate, onDone, onReceipt }: { trip: Trip; onR
 /* 9. Cancelled                                                          */
 /* ------------------------------------------------------------------ */
 
-export function CancelledSheet({ trip, onAgain, onHome }: { trip: Trip; onAgain: () => void; onHome: () => void }) {
+export function CancelledSheet({ trip, onAgain, onHome, busy }: { trip: Trip; onAgain: () => void; onHome: () => void; busy?: boolean }) {
   return (
     <>
       <PanelBody contentClassName="pt-6">
@@ -1009,9 +1009,9 @@ export function CancelledSheet({ trip, onAgain, onHome }: { trip: Trip; onAgain:
           <span className="flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-danger">
             <X size={28} strokeWidth={3} />
           </span>
-          <h2 className="mt-4 text-xl font-semibold leading-tight tracking-[-0.015em]">Trip cancelled</h2>
+          <h2 className="mt-4 text-xl font-semibold leading-tight tracking-[-0.015em]">{trip.liveOutcome === "Expired" ? "Trip expired" : "Trip cancelled"}</h2>
           <p className="mt-1.5 max-w-[36ch] text-[13px] leading-snug text-muted text-pretty">
-            {trip.cancelledBy === "Rider" ? "You cancelled this trip." : trip.cancelledBy === "Driver" ? "Your driver cancelled this trip." : "This trip was cancelled."}
+            {trip.liveOutcome === "Expired" ? "This ride expired before it started. Request another ride when you are ready." : trip.cancelledBy === "Rider" ? "You cancelled this trip." : trip.cancelledBy === "Driver" ? "Your driver cancelled this trip." : "This trip was cancelled."}
             {trip.cancellationReason ? ` Reason: ${trip.cancellationReason}.` : ""}
           </p>
           {trip.cancellationFee ? (
@@ -1027,8 +1027,8 @@ export function CancelledSheet({ trip, onAgain, onHome }: { trip: Trip; onAgain:
         <TripRoute trip={trip} compact className="mt-6" />
       </PanelBody>
       <PanelFooter className="flex flex-col gap-2">
-        <Button size="lg" arrow onClick={onAgain}>
-          Book another ride
+        <Button size="lg" arrow loading={busy} onClick={onAgain}>
+          Request again
         </Button>
         <Button variant="ghost" onClick={onHome}>
           Back to home
