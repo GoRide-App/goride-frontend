@@ -370,6 +370,10 @@ test('local cash settlement reaches the rider finished screen without using the 
 
 function driver(status = 'Completed') {
   const offer = { tripId: 'trip-1', status };
+  let current = offer;
+  const lifecycle = {};
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../../src/lib/ride-lifecycle.ts', import.meta.url), 'utf8'),
+    { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: lifecycle });
   const locationUpdates = [];
   const accepted = [];
   const modules = {
@@ -383,10 +387,11 @@ function driver(status = 'Completed') {
       errorMessage: (e) => e.message,
     },
     '@/lib/mock/world': {}, '@/lib/utils': {}, '@/lib/geo/providers': {},
+    '@/lib/ride-lifecycle': lifecycle,
     '@/lib/api/live-matching': {
       ON_TRIP_STATUSES: ['Accepted', 'Arrived', 'InProgress'],
-      getActiveOfferLive: async () => offer,
-      updateTripStatusLive: async (tripId, driverId, action) => ({ ...offer, status: action }),
+      refreshDriverTripLive: async (_, previous) => lifecycle.driverTripSnapshot(current, previous),
+      updateTripStatusLive: async (tripId, driverId, action) => (current = { ...offer, status: action }),
       acceptOfferLive: async (tripId) => { accepted.push(tripId); return { tripId, status: 'Accepted' }; },
     },
     '@/components/ui/toast': { toast: { info() {}, error() {}, success() {} } },
@@ -398,7 +403,7 @@ function driver(status = 'Completed') {
     exports, console,
     require: (id) => { assert.ok(modules[id], `Unexpected dependency: ${id}`); return modules[id]; },
   });
-  exports.useDriverStore.setState({ driverId: 'driver-1', online: true, location: { heading: 0, status: 'Online' } });
+  exports.useDriverStore.setState({ driverId: 'driver-1', online: true, restoringLiveTrip: false, location: { heading: 0, status: 'Online' } });
   return { ...exports, offer, locationUpdates, accepted };
 }
 

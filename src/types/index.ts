@@ -236,6 +236,7 @@ export interface Trip {
   finalFare?: number | null;
   distanceKm: number;
   durationMin: number;
+  liveOutcome?: "Cancelled" | "DriverCancelled" | "Expired";
   cancellationReason?: string | null;
   cancellationFee?: number | null;
   cancelledBy?: "Rider" | "Driver" | "System" | null;
