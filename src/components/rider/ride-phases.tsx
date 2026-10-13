@@ -8,7 +8,8 @@ import { AlertTriangle, ArrowLeft, Check, CreditCard, Flag, Info, LocateFixed, M
 import type { FareEstimate, Place, Trip, VehicleType } from "@/types";
 import { CANCEL_REASONS_RIDER, COMPLAINT_CATEGORIES, MATCH_ROUNDS, VEHICLE_IMAGES } from "@/lib/constants";
 import { isLiveRide } from "@/lib/api";
-import { cardLabel } from "@/lib/card-input";
+import { cardLabel, formatCardExpiry } from "@/lib/card-input";
+import { rideCardOption } from "@/lib/ride-card-option";
 import { cn, formatKm, formatLKR, formatMinutes } from "@/lib/utils";
 import { Button, IconButton } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/field";
@@ -17,7 +18,7 @@ import { Badge, Chip, RatingStars, RouteRail, Skeleton } from "@/components/ui/p
 import { SheetHeader } from "@/components/ui/sheet";
 import { Spinner } from "@/components/ui/spinner";
 import { PanelBody, PanelFooter, PanelHeader } from "@/components/layout/map-split";
-import { SavedCardPicker } from "@/components/payments/card-bits";
+import { CardBrandMark, SavedCardPicker } from "@/components/payments/card-bits";
 import { AddCardForm } from "@/components/payments/card-form";
 import { PaymentSummaryCard, formatPaidAmount, paidWithLabel, usePaidSummary } from "@/components/payments/payment-summary";
 import { ReceiptStatus } from "@/components/payments/receipt-status";
@@ -45,16 +46,79 @@ function FieldLabel({ children, className }: { children: React.ReactNode; classN
   return <p className={cn("text-[13px] font-semibold text-ink", className)}>{children}</p>;
 }
 
-function PayWithChips({ value, onChange, disabled }: { value: "Card" | "Cash"; onChange: (m: "Card" | "Cash") => void; disabled?: boolean }) {
+function PayWithOptions({ value, onChange, disabled }: { value: "Card" | "Cash"; onChange: (m: "Card" | "Cash") => void; disabled?: boolean }) {
+  const cards = useCheckoutStore((s) => s.cards);
+  const cardsError = useCheckoutStore((s) => s.cardsError);
+  const loadCards = useCheckoutStore((s) => s.loadCards);
+  const [loading, setLoading] = React.useState(true);
+  const option = rideCardOption(cards, cardsError, loading);
+
+  React.useEffect(() => {
+    let alive = true;
+    // Refresh on entry, including a return from Payment methods. Loading cards
+    // alone does not begin checkout or prepare a payment for this ride.
+    void loadCards().then(() => {
+      if (alive) setLoading(false);
+    });
+    return () => { alive = false; };
+  }, [loadCards]);
+
+  React.useEffect(() => {
+    if (option.kind === "add" && value !== "Cash") onChange("Cash");
+  }, [option.kind, value, onChange]);
+
+  const cashSelected = value === "Cash" || option.kind === "add";
+  const cardSelected = value === "Card";
+
   return (
-    <div className="flex gap-2" role="group" aria-label="Pay with">
-      <Chip selected={value === "Cash"} onClick={() => onChange("Cash")} icon={<Wallet />} disabled={disabled}>
-        Cash
-      </Chip>
-      <Chip selected={value === "Card"} onClick={() => onChange("Card")} icon={<CreditCard />} disabled={disabled}>
-        Card
-      </Chip>
-    </div>
+    <>
+      <div className="flex min-w-0 flex-col gap-2" role="group" aria-label="Pay with">
+        <Chip className="self-start" selected={cashSelected} onClick={() => onChange("Cash")} icon={<Wallet />} disabled={disabled}>
+          Cash
+        </Chip>
+        {/* Reserve the same space for all card states, including a holder name. */}
+        <div className="flex h-24 min-w-0 items-center">
+          {option.kind === "loading" ? (
+            <div className="h-full w-full" role="status" aria-busy="true">
+              <span className="sr-only">Loading saved cards</span>
+              <Skeleton className="h-full rounded-2xl" />
+            </div>
+          ) : option.kind === "saved" ? (
+            <button
+              type="button"
+              aria-pressed={cardSelected}
+              disabled={disabled}
+              onClick={() => onChange("Card")}
+              className={cn(
+                "flex h-full w-full min-w-0 items-center gap-3 rounded-2xl px-3.5 py-3 text-left ring-1 transition-[background-color,box-shadow,opacity] duration-200 ease-(--ease-spring) disabled:opacity-50",
+                cardSelected ? "bg-brand-50 ring-2 ring-brand-400" : "bg-white ring-line hover:bg-surface-2",
+              )}
+            >
+              <CardBrandMark brand={option.card.brand} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[15px] font-semibold leading-snug tabular-nums">{cardLabel(option.card.brand, option.card.last4)}</span>
+                <span className="block text-[13px] leading-snug text-muted tabular-nums">Expires {formatCardExpiry(option.card.expMonth, option.card.expYear)}</span>
+                {option.card.holderName && <span className="block truncate text-[13px] leading-snug text-muted" title={option.card.holderName}>{option.card.holderName}</span>}
+              </span>
+              <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full", cardSelected ? "bg-brand-400 text-ink" : "ring-2 ring-inset ring-line")} aria-hidden>
+                {cardSelected && <Check size={14} strokeWidth={3} />}
+              </span>
+            </button>
+          ) : option.kind === "add" ? (
+            <Button href="/rider/profile#profile-payments-title" variant="secondary" leftIcon={<Plus size={18} />} disabled={disabled}>
+              Add a card
+            </Button>
+          ) : (
+            <Chip selected={cardSelected} onClick={() => onChange("Card")} icon={<CreditCard />} disabled={disabled}>
+              Card
+            </Chip>
+          )}
+        </div>
+      </div>
+      <p className="mt-2.5 min-h-8 text-xs leading-4 text-muted text-pretty">
+        {option.kind === "add" ? "No saved card yet. Cash is selected. Add a card in Payment methods." : "You pay after the trip ends."}
+      </p>
+    </>
   );
 }
 
@@ -340,7 +404,7 @@ export function SelectVehicleSheet({
 
         <div className="mt-6">
           <FieldLabel className="mb-2">Pay with</FieldLabel>
-          <PayWithChips value={paymentPreference} onChange={onPaymentPreference} />
+          <PayWithOptions value={paymentPreference} onChange={onPaymentPreference} disabled={busy} />
         </div>
 
         <p className="mt-5 flex items-start gap-2 text-xs leading-snug text-muted text-pretty">
@@ -421,8 +485,7 @@ export function ReviewSheet({
 
         <div className="mt-6">
           <FieldLabel className="mb-2">Pay with</FieldLabel>
-          <PayWithChips value={paymentPreference} onChange={onPaymentPreference} />
-          <p className="mt-2.5 text-xs leading-snug text-muted text-pretty">You pay after the trip ends. Your saved card is ready to use, or you can choose cash.</p>
+          <PayWithOptions value={paymentPreference} onChange={onPaymentPreference} disabled={busy} />
         </div>
 
         {!emailVerified && (
