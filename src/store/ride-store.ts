@@ -55,6 +55,7 @@ interface RideState {
   stops: Place[];
   uiPhase: "plan" | "select" | "review";
   trip: Trip | null;
+  currentTripId: string | null;
   estimates: FareEstimate[];
   selectedVehicleTypeId: string | null;
   paymentPreference: PaymentMethod;
@@ -122,6 +123,7 @@ export const useRideStore = create<RideState>()(
       stops: [],
       uiPhase: "plan",
       trip: null,
+      currentTripId: null,
       estimates: [],
       selectedVehicleTypeId: null,
       paymentPreference: "Cash",
@@ -171,13 +173,14 @@ export const useRideStore = create<RideState>()(
 
       async requestRide() {
         const { trip, selectedVehicleTypeId } = get();
-        if (!trip || !selectedVehicleTypeId) return false;
+        if (!trip || !selectedVehicleTypeId || get().busy) return false;
         set({ busy: true, error: null });
         try {
           const t = await api.trips.request(trip.id, selectedVehicleTypeId);
-          set({ trip: t, busy: false });
+          set({ trip: t, currentTripId: t.id, busy: false });
           lastToastSig = `${t.id}|${t.status}|${t.driverId}`;
           bind(t.id, set, get);
+          await get().refreshTrip();
           return true;
         } catch (e) {
           set({ busy: false, error: errorMessage(e) });
@@ -187,13 +190,14 @@ export const useRideStore = create<RideState>()(
 
       async cancel(reason, complaint) {
         const t = get().trip;
-        if (!t) return false;
+        if (!t || get().busy) return false;
         set({ busy: true, error: null });
         try {
           const trip = await api.trips.cancel(t.id, "Rider", reason, complaint);
           set({ trip, busy: false });
           return true;
         } catch (e) {
+          await get().refreshTrip();
           set({ busy: false, error: errorMessage(e) });
           return false;
         }
@@ -201,13 +205,14 @@ export const useRideStore = create<RideState>()(
 
       async retry(vehicleTypeId) {
         const t = get().trip;
-        if (!t) return false;
+        if (!t || get().busy) return false;
         set({ busy: true, error: null });
         try {
           const trip = await api.trips.retry(t.id, vehicleTypeId);
-          set({ trip, busy: false, selectedVehicleTypeId: vehicleTypeId ?? get().selectedVehicleTypeId });
+          set({ trip, currentTripId: trip.id, busy: false, selectedVehicleTypeId: vehicleTypeId ?? get().selectedVehicleTypeId });
           lastToastSig = `${trip.id}|${trip.status}|${trip.driverId}`;
           bind(trip.id, set, get);
+          await get().refreshTrip();
           return true;
         } catch (e) {
           set({ busy: false, error: errorMessage(e) });
@@ -218,12 +223,17 @@ export const useRideStore = create<RideState>()(
       async restore(riderId) {
         set({ restoring: true });
         try {
-          const active = await api.trips.activeForRider(riderId);
+          let active = await api.trips.activeForRider(riderId);
+          if (!active && get().currentTripId) {
+            const previous = await api.trips.get(get().currentTripId!).catch(() => null);
+            if (previous?.riderId === riderId && previous.status === "CANCELLED") active = previous;
+          }
           if (active) {
             lastToastSig = `${active.id}|${active.status}|${active.driverId}`;
-            const loc = active.driverId ? await api.location.getDriverLocation(active.driverId) : null;
-            set({ trip: active, pickup: active.pickup, destination: active.destination, stops: active.stops, selectedVehicleTypeId: active.vehicleTypeId, driverLocation: loc, restoring: false });
+            const loc = active.driverId ? await api.location.getDriverLocation(active.driverId).catch(() => null) : null;
+            set({ trip: active, currentTripId: active.id, pickup: active.pickup, destination: active.destination, stops: active.stops, selectedVehicleTypeId: active.vehicleTypeId, driverLocation: loc, restoring: false });
             bind(active.id, set, get);
+            await get().refreshTrip();
           } else {
             const t = get().trip;
             // drop stale terminal/draft trips from a previous session
@@ -240,7 +250,7 @@ export const useRideStore = create<RideState>()(
         if (!t) return;
         try {
           const trip = await api.trips.get(t.id);
-          set({ trip });
+          if (get().trip?.id === t.id && trip.version >= get().trip!.version) set({ trip });
         } catch {
           /* ignore */
         }
@@ -308,7 +318,7 @@ export const useRideStore = create<RideState>()(
       finish() {
         unsubscribe?.();
         unsubscribe = null;
-        set({ trip: null, estimates: [], driverLocation: null, uiPhase: "plan", pickup: null, destination: null, stops: [], error: null });
+        set({ trip: null, currentTripId: null, estimates: [], driverLocation: null, uiPhase: "plan", pickup: null, destination: null, stops: [], error: null });
       },
 
       resetPlanning() {
@@ -318,7 +328,7 @@ export const useRideStore = create<RideState>()(
     {
       name: "goride.ride",
       storage: createJSONStorage(() => sessionStorage),
-      partialize: (s) => ({ pickup: s.pickup, destination: s.destination, stops: s.stops, selectedVehicleTypeId: s.selectedVehicleTypeId, paymentPreference: s.paymentPreference, uiPhase: s.uiPhase }),
+      partialize: (s) => ({ currentTripId: s.currentTripId, pickup: s.pickup, destination: s.destination, stops: s.stops, selectedVehicleTypeId: s.selectedVehicleTypeId, paymentPreference: s.paymentPreference, uiPhase: s.uiPhase }),
     },
   ),
 );
