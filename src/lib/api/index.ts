@@ -14,6 +14,7 @@ import { httpApi } from "./http";
 import { mockApi } from "@/lib/mock/api";
 import {
   isLiveTrip,
+  cancelLiveRideRequest,
   resumeLiveRideRequest,
   startLiveRideRequest,
   type LiveMatchingDeps,
@@ -282,14 +283,29 @@ function createTripApi(): GoRideApi {
         if (IS_MOCK) void startLiveRideRequest(tripId, liveMatchingDeps);
         return trip;
       },
+      async cancel(tripId, by, reason, complaint) {
+        const trip = await base.trips.get(tripId);
+        if (IS_MOCK && by === "Rider" && await cancelLiveRideRequest(tripId, trip.riderId, reason, liveMatchingDeps)) {
+          if (complaint) await base.trips.fileComplaint(tripId, trip.riderId, complaint.category, complaint.details);
+          return base.trips.get(tripId);
+        }
+        return base.trips.cancel(tripId, by, reason, complaint);
+      },
       async retry(tripId: string, vehicleTypeId?: string): Promise<Trip> {
-        const trip = await base.trips.retry(tripId, vehicleTypeId);
-        if (IS_MOCK) void startLiveRideRequest(tripId, liveMatchingDeps);
+        if (!IS_MOCK) return base.trips.retry(tripId, vehicleTypeId);
+        // A retry is a new request. A cancelled/claimed ID is never reopened on the server.
+        const previous = await base.trips.get(tripId);
+        const draft = await base.trips.create({ riderId: previous.riderId, pickup: previous.pickup, destination: previous.destination, stops: previous.stops });
+        const trip = await base.trips.request(draft.id, vehicleTypeId ?? previous.vehicleTypeId);
+        void startLiveRideRequest(trip.id, liveMatchingDeps);
         return trip;
       },
       async activeForRider(riderId: string): Promise<Trip | null> {
         const trip = await base.trips.activeForRider(riderId);
-        if (IS_MOCK && trip) resumeLiveRideRequest(trip.id, liveMatchingDeps);
+        if (IS_MOCK && trip) {
+          await resumeLiveRideRequest(trip.id, liveMatchingDeps);
+          return base.trips.get(trip.id);
+        }
         return trip;
       },
     },
