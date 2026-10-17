@@ -1,0 +1,29 @@
+{
+  "defaults": {
+    "protocol": "http",
+    "host": "localhost",
+    "port": 8080,
+    "users": 0,
+    "rampUp": 1,
+    "duration": 60,
+    "stepUsers": 0,
+    "stepEvery": 45,
+    "stepDuration": 180,
+    "spikeUsers": 0,
+    "spikeDelay": 60,
+    "spikeDuration": 30,
+    "probeUsers": 1,
+    "thinkMin": 500,
+    "thinkMax": 1500,
+    "driversEnabled": false,
+    "vehicleType": "",
+    "connectTimeout": 5000,
+    "responseTimeout": 10000
+  },
+  "profiles": {
+    "smoke": {"users": 2, "rampUp": 2, "duration": 60, "thinkMin": 1500, "thinkMax": 3000},
+    "load": {"users": 50, "rampUp": 30, "duration": 180},
+    "stress": {"stepUsers": 50, "stepEvery": 45, "stepDuration": 180, "duration": 180},
+    "spike": {"users": 20, "rampUp": 10, "duration": 150, "spikeUsers": 200, "spikeDelay": 60, "spikeDuration": 30}
+  }
+}

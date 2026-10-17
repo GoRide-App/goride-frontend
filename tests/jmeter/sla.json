@@ -1,0 +1,28 @@
+{
+  "required_labels": ["fare: happy path", "fare: invalid input -> 400", "health"],
+  "profiles": {
+    "smoke": {
+      "overall_error_pct_max": 1,
+      "label_p95_ms_max": {"fare: happy path": 800, "health": 300}
+    },
+    "load": {
+      "overall_error_pct_max": 1,
+      "label_p95_ms_max": {"fare: happy path": 800, "health": 300}
+    },
+    "stress": {
+      "overall_error_pct_max": 5,
+      "saturation_p95_ms": 1000
+    },
+    "spike": {
+      "overall_error_pct_max": 5,
+      "recovery": {
+        "label": "health",
+        "p95_ms_max": 300,
+        "within_s": 30,
+        "window_s": 10,
+        "min_samples": 5,
+        "coverage_tolerance_s": 2
+      }
+    }
+  }
+}
