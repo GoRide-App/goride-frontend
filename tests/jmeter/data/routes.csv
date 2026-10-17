@@ -1,0 +1,6 @@
+name,startLat,startLng,endLat,endLng
+Galle Face Green to SLIIT Malabe Campus,6.9271,79.8448,6.9147,79.9729
+short hop to One Galle Face Mall,6.9271,79.8448,6.9276,79.8457
+cross-city Colombo Fort to SLIIT Malabe,6.9344,79.8501,6.9147,79.9729
+zero-distance (pickup equals destination),6.9271,79.8448,6.9271,79.8448
+reversed direction (SLIIT to Galle Face Green),6.9147,79.9729,6.9271,79.8448

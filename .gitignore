@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+/tests/jmeter/results/
 
 # next.js
 /.next/
