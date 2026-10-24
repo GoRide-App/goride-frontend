@@ -9,9 +9,9 @@ setup('authenticate as rider', async ({ page }) => {
   await page.goto('https://goride-demo.vercel.app/');
   await page.getByRole('link', { name: 'Sign in' }).click();
   await page.getByTestId('login-page-username-input').click();
-  await page.getByTestId('login-page-username-input').fill(process.env.RIDER_TEST_USER!);//('Jamiyasbooboo');
+  await page.getByTestId('login-page-username-input').fill(process.env.RIDER_TEST_USER!);
   await page.getByTestId('login-page-password-input').click();
-  await page.getByTestId('login-page-password-input').fill(process.env.RIDER_TEST_PASS!);//('Jamiya123');
+  await page.getByTestId('login-page-password-input').fill(process.env.RIDER_TEST_PASS!);
   await page.waitForTimeout(1500);
   await page.getByTestId('login-page-continue-login-button').click();
   // --------------------------------------------------------------
