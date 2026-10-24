@@ -1,5 +1,46 @@
 # goride-frontend
 
+## Ride lifecycle synchronization
+
+The live driver card renders the trip service's status on restore, poll and action
+responses. An action failure (including 409 `INVALID_TRIP_TRANSITION`) refreshes
+`GET /matching/offers/active?driverId=...`; only a failed refresh displays an error.
+Late polls cannot overwrite action responses. Buttons are disabled during actions.
+Accepted/Arrived/InProgress block going offline or accepting another ride;
+Completed releases availability immediately and never waits for payment.
+
+New trip-service calls, using `NEXT_PUBLIC_TRIP_API_URL`:
+
+| Method and path | Body | Success |
+| --- | --- | --- |
+| `POST /matching/offers/{tripId}/cancel` | `{ driverId, reason? }` | 200 Cancelled offer; driver confirms before cancelling Accepted/Arrived |
+| `POST /matching/offers/{tripId}/decline` | `{ driverId }` | 200 Declined offer; incoming offers now use server decline |
+| `POST /matching/ride-requests/{tripId}/cancel` | `{ riderId }` | 200 `{ tripId, status: "Cancelled" }` before start |
+
+These endpoints return 400 for invalid input, 404 for absent/unowned trips, 409 for
+invalid stages, and 503 for store failures. Stage updates retain the existing
+`POST /matching/offers/{tripId}/status` body `{ driverId, action }`, now with 200 for
+same-stage retries and `currentStatus` in a 409 response.
+
+Riders continue polling `GET /matching/ride-requests/{tripId}` through Accepted,
+Arrived, InProgress and Completed. Cancelled/DriverCancelled/Expired stop the ride
+and show **Request again**. Reload checks the server before displaying a restored
+stage. Cancellation waits for initial delivery to settle; a rejected cancellation
+resyncs the rider. A failed delivery response is checked before demo fallback, so
+an already accepted live ride is not replaced by a simulated driver. Unconfirmed
+network failures keep checking the live request. Retried searches use a new trip ID.
+
+The backend expires idle Accepted/Arrived trips after `TripLifecycle:StaleAfterMinutes`
+(default 120; configured on the trip service, not the browser). When an active trip
+disappears, the driver reads its rider status to announce cancellation/expiry and
+does not restore an older completed trip. No frontend config or packages were added.
+Payment IDs, card retry behavior and driver payment notices are unchanged.
+
+`tests/unit/ride-lifecycle.test.mjs` exercises real stores/adapters and the rider's
+local trip bridge with controlled responses and timers. Verify with `npx tsc --noEmit`,
+`npx eslint src`, and `npm test`. If test worker spawning is blocked, run
+`node --test --test-isolation=none tests/unit/*.test.mjs` for that run only.
+
 ## CI
 
 The `CI` workflow runs on pull requests and pushes to `dev`/`main`, and can

@@ -8,6 +8,7 @@
  * when it's unreachable (the rider side falls back to the mock matcher).
  */
 import type { LatLng } from "@/types";
+import { driverTripSnapshot, type DriverTripSnapshot } from "../ride-lifecycle";
 
 const TRIP_API_URL = (process.env.NEXT_PUBLIC_TRIP_API_URL ?? "http://localhost:8080").replace(/\/+$/, "");
 
@@ -17,6 +18,7 @@ export class LiveMatchingError extends Error {
     message: string,
     public readonly status: number,
     public readonly code?: string,
+    public readonly currentStatus?: string,
   ) {
     super(message);
   }
@@ -30,8 +32,8 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { Accept: "application/json", ...(init?.body ? { "Content-Type": "application/json" } : {}), ...init?.headers },
   });
   if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { error?: string; title?: string; code?: string } | null;
-    throw new LiveMatchingError(body?.error ?? body?.title ?? `Request failed (${res.status})`, res.status, body?.code);
+    const body = (await res.json().catch(() => null)) as { error?: string; title?: string; code?: string; currentStatus?: string } | null;
+    throw new LiveMatchingError(body?.error ?? body?.title ?? `Request failed (${res.status})`, res.status, body?.code, body?.currentStatus);
   }
   if (res.status === 204) return null as T;
   return res.json() as Promise<T>;
@@ -90,7 +92,7 @@ export function requestRideLive(p: RideRequestPayload): Promise<RideRequestResul
 export interface RideRequestStatus {
   tripId: string;
   /** "Searching", "NoDriver", or the accepted driver's trip stage. */
-  status: "Searching" | "NoDriver" | "Accepted" | "Arrived" | "InProgress" | "Completed";
+  status: "Searching" | "NoDriver" | "Accepted" | "Arrived" | "InProgress" | "Completed" | "Cancelled" | "DriverCancelled" | "Expired";
   /** Present once status is "Accepted" or later. */
   driver?: {
     driverId: string;
@@ -111,6 +113,12 @@ export interface RideRequestStatus {
 
 export function getRideRequestStatusLive(tripId: string): Promise<RideRequestStatus> {
   return call(`/matching/ride-requests/${encodeURIComponent(tripId)}`);
+}
+
+export function cancelRideRequestLive(tripId: string, riderId: string): Promise<RideRequestStatus> {
+  return call(`/matching/ride-requests/${encodeURIComponent(tripId)}/cancel`, {
+    method: "POST", body: JSON.stringify({ riderId }),
+  });
 }
 
 /* ---- driver side ---- */
@@ -149,6 +157,28 @@ export function getPendingOffersLive(driverId: string): Promise<LiveDriverOffer[
  */
 export function getActiveOfferLive(driverId: string): Promise<LiveDriverOffer | null> {
   return call(`/matching/offers/active?driverId=${encodeURIComponent(driverId)}`);
+}
+
+export async function refreshDriverTripLive(driverId: string, previous: LiveDriverOffer | null): Promise<DriverTripSnapshot> {
+  const active = await getActiveOfferLive(driverId);
+  const ended = previous && ON_TRIP_STATUSES.includes(previous.status) && active?.tripId !== previous.tripId
+    ? await getRideRequestStatusLive(previous.tripId).catch((error) => {
+      if (error instanceof LiveMatchingError && error.status === 404) return null;
+      throw error;
+    }) : null;
+  return driverTripSnapshot(active, previous, ended?.status);
+}
+
+export function cancelOfferLive(tripId: string, driverId: string, reason?: string): Promise<LiveDriverOffer> {
+  return call(`/matching/offers/${encodeURIComponent(tripId)}/cancel`, {
+    method: "POST", body: JSON.stringify({ driverId, reason }),
+  });
+}
+
+export function declineOfferLive(tripId: string, driverId: string): Promise<LiveDriverOffer> {
+  return call(`/matching/offers/${encodeURIComponent(tripId)}/decline`, {
+    method: "POST", body: JSON.stringify({ driverId }),
+  });
 }
 
 /**

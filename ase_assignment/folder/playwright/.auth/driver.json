@@ -1,0 +1,125 @@
+{
+  "cookies": [
+    {
+      "name": "commonAuthId",
+      "value": "607c4824-f59d-4918-8686-fc4c075d0420",
+      "domain": "api.asgardeo.io",
+      "path": "/t/goride/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "opbs",
+      "value": "317c45b0-cc79-466d-b7fe-6a81225c39a4-v2",
+      "domain": "api.asgardeo.io",
+      "path": "/t/goride/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "wpaf",
+      "value": "1792835731.967.204.582985|71acb898e1e9604d7bd8c41e308eb24e",
+      "domain": "api.asgardeo.io",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "wpaf",
+      "value": "1792835732.944.204.801518|71acb898e1e9604d7bd8c41e308eb24e",
+      "domain": "accounts.asgardeo.io",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "JSESSIONID",
+      "value": "54B6DAA8EE2969BA60494869D71020F4",
+      "domain": "accounts.asgardeo.io",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "ui_lang",
+      "value": "en_US",
+      "domain": ".asgardeo.io",
+      "path": "/",
+      "expires": 1795427734,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "MAUT",
+      "value": "eyJjb250ZW50Ijoie1widGVuYW50XCI6XCJnb3JpZGVcIn0ifQ==",
+      "domain": ".asgardeo.io",
+      "path": "/",
+      "expires": 1795463736.266315,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Strict"
+    },
+    {
+      "name": "JSESSIONID",
+      "value": "FC2C624F853D5953B4201508F7EAB09B",
+      "domain": "api.asgardeo.io",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "app_session",
+      "value": "chunks-2",
+      "domain": "goride-demo.vercel.app",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "app_sessionC1",
+      "value": "CfDJ8HM2Si5AzLROo_qJyob19gIowQGnIkwMmcgmwkjGTjN40eXEbjDZWrbW7FdDNRL_dM1BkaB5ydgIrXMoKfhJCcOEKbN3t7HJENWNcC9XysTCuhUaWf9YPpJfIGC54yNffz43n2-H5Hjlo4iq6xowhGkJ1TeRifZeyemp2RYHWaexsk2HE1WBZt_M3eY92iHwDJOSIfbuz6cKaNlwTfTYwMYo0FskqLHIUhlNyXY1XuuMVvgGPB5fE-1OSCzCGcj8Gw7I2YOHpEKZep0VRLkDbvTZ0LKmcjT7MDak3CHfdMOzDfRUACupgIn38Rsa_1rb-YVJ2xjN-z861MBSN5z7-q3dAukRlIihpbsGAGy4gcXwcsjDLtjdRuklpLRnc4C2BUeWWsCdNL8-c19yhaH4w10lGtisfPdGiUNYXwzvKQ2IVAT4_v11fOyYohnotyGoVm7FZQ3Gs4fixVyEaXLqnSVhsvv4jGMFuST49rAwSmtQfBHhq8gjHn8HpV4AF2hnYoWpUNq3hG6kousbDvjuC58YP6wXnjjIdK-9A4SD0h6aJ0XDgb4umJscG3Lwdsq4ZP9BOoyPzEFcwW_i0QL8I84UKOPO_1_jPv3Qp7Poa_-ybydunQDbi6SVoqRtN7kJhg0I3Ne_vcGc6sPzFYLBxvfWyRhWeblyqZwDkwX8i5pQRPLBoFAsWHkAL2geFB6GC3lbNpLS1eElNw-jJzJbQ2mzBeJ-gIW8kHca_sNM5sIqbHQ_4NQq1ZtJRHTh5eGp0LsaHDSd7SNO-nc445WJ1lGVF723Bd12eQT-f3hbRudPjnhk3mOK0SDP3KE28whdXu_soYRnXZkG0ofEJhkJ6TyXIVnSD3Z0XL0P4WeAtrI3rjuszC-xDZ0vY81N5UsHR6LRdA6Dxg7A5OQH4A2R-Qb_Zs6qyW7CSEI05JW70mFjznzT7YpB99hQewCWlvI8HikBKrUgltMnvU1TfyRBM8HoopKxtPcqZjyGt474V7WKStqoiYEWTdq5nYz6ZGwMaca2J1XnNlTs5OqYiBLxdyXBg8MRFWkJuRjy85OItw15BiUsBuBgrQY8UVQygqVKFxBIEQGqmCQkMFyi-nYMoBHbJ0dEz53tN3uF3kjs2hGVirHKxcd3neglkzgmUVxsg_hgNuX5KURSPM8OpYKeV2QbFrpfNtrgw9pDk65YF1VOmu311TDrKn4Z1csfFulX_yn8Yt8hasjv0McrKBlXo-_mXlbGkDy3K97Lyd1jxXVjWtdWUP4UqkiK1yqLfqrn5trRwUhRpXfKZ5xE-hdjN_JHex4GcMIfWIM6Eb9qGkf31ic_CmsyDZUT3lAXInR5G_Y9NuBnOWjgCfbNHAdDztmSv4tedSBHtERpgA0MJwV5xZGe8RjAnIFLJqXq_VcdX6-JCMjcbJ4WF8IKEqBhzIowSL_jrVzYRX9tAEZ3rCK_qY8WRNZ1UfoFQe6iXiNNnA_-9r3F_0MXoBdr3jelT33AGPAq3L2L16ZYq6vHfS4k3J9IM4amkz3_NVMKAyhXjBRnG785WUE1rj6mmrpThAAn2VKJJXuuVzk9j60mrsEOYujETbehVNHwESWIOBjqNdj05tcYmji7PgkGqkwCxROk7NN1UZ8TSJmsnmVpIWmkH00YwuRSrgeA8mf7JmXF7ARgBg-RdCdQ-z4gmiOceludHqF_AZ46B8_b0DudWMxd3mN_FrKJMO6NOSXh7nKvhQeQKyA9TE4f6QGoMjXk_SPD6u184e4NZQJfLHEDhQrC1j8WWP7uhc7tAp4anNp1FaF_6SEHKj_qXZnC3_GEcfahaMGjYtQAvBXqJh62xVdqmXzntiu7rplegzjPs6k1PzNXercijGU0FXrVlo4nKTyfKOBGYGe3VDNF3Nrd9iqTgNsHQOBDdaX18lXB--t_ejNir0eOLNvI22Gw4WSD_v5ayaOsV220c7PuH6sJssI8uVJ4ErqAVne4YDUsDUXn5g6b04i0FoSIAXU37zfi_oaunB9Na6TuU8pqu2p2UPvXxRGTSX3HM_yW2tTaRSNXeSYzfnDvkqL9DwuE8GXNeVisr0k7XNUvAGxBMEEpVeIhamP5_psD9Px32FT62zhwx2Xo1e_swAHTz7phiW-SfDoJhfxKf7alIqCCs-2bq1I6FFjOqQeTfn94OUXH_0rKPGQtly18FXhUalIjHXlyTWX46byvzPLnDuBbRMk36v7UcZ-rXI5iinx36tXLKteny49Yn79WUE1Rcf3aNjEs7LOPVP1OYhr9Inp6k3BjN5WzMGy359h4UBha7p5Lp_uJrOGx8h9wVwy37GYgtvjumR1uus4XvBD2OCQA0LwaWzyfWX8KQXaMvJbSiiDWLdj7PzOwgToKSV2mo1RuYhc0T2DYF2SKP8MwF14heLA8W6oI3AD2VY3AehZ7gpYX02i5uedcoEl4ckN0lAS8P8AZ0c7nWGRq7L3DX9qkdlSRbf5k-hJYjx_nkNw9jYNacbuOTgUZRWqzV1BM3KAYk-6F9tljYg9zGLIN9QLdcN3g4v36-AQAX2aoMtUCJb-IC9mEcbIY5kBAGvvAmJteMFIhCI5MIb4xCSRRhoRrxXw7NTBDDYKO71uoW5uLDMt-DaGdU_lVGpRki5J5bFN6rzw8z0D4r6LUT2_JQ2xo8KP2KxpsKydCILD6iVrfJvmX1bkfgKF0W_ZxpqR1txtMzpEmnTwqabiqfVnNrjB7KrpXFuuJO0LETdpeCW8Mj390HrMRleKlNXUHFmJjIuZcisY0knEyICbHuaAjBfsk8-kR8lwoFBh6fSpZ4bqsRw02usYNGGDUqc3Ae0SJ3r8e1owbHzKsQCJVtIqeoivO92PEXpNK4zk7prTfjksIozxOmm5JRquNlyDS1rY3ENZnhvnSmLqNBP82635DM5amiR85MBXTYm_fNRmQ0IrY--gkAGNfA0EyMpahmk_yUKG2SFAgXFEIflsSyTEjkJWJRbeZDQnb4IS8gIxus8PyUcAbzXTbY4Ub5j8g3YV0vrtckGB0_r0C20OeapqtX7a3ccj2z9vbRq5M5uWLlDN8f0udz6rYPKVrXOW_0dP5rC8yZVyRt-8S-DrsYEH0HcdBeUb52AuXNrhTZe_FgiD3aTe60IIWnWNiIPHyu90KH6Jdw9zH8u99h_yplkWLswRW6aoTI-Bo8keOH803UJMY8BpBGINuzCEaAmdGllj5KW2Lq7qCwgvPuU-2nE8JFVQmXLB59ciMLCWbMakzlbETOEI1eIYafqi_rVYedVJ6JcT99x1pLKzUC6hZZDEOSiVtwG6iNXjkNdGNVwmOfEeIbiCx32yl7bOk3RhW5QwnZ0BGHDpFnsQl-Wfm-PawwscZQr5ROMODsF8_SX7xPWlSIwLLj-2OSeI3JUHp-Xw_OeMaty4OQXQONLLN_RZE9KEJoFy81p658w8FvP0yIQ5278NclrjuzFi3BQJjJs99jTApToF0pxY7ukyGsazKfaHAL0XGthyMRtlz7LrL8XaU-bT1jqoORvcSwUvrOUkY5_AU8egf_Z72Uh4qQj6B3uoIkZNRreOYY2ozP1NkygByht7NjhZXELjbRozbI6vxCOsksVQVxB6kWW9RyWcnyMeoau1IZlX26ada-6b0S2ba3ZrzdpO9Evm7UKLNxGDYK37GCIIgTAUyXU0U3EXAdPsSm84qeuT-efHQSaS43oyJGnimHPzVUWBgv-dCcHXsdu-aJIWjl87gvXsLA9PKyIrZ2qaytCJwoaXWc2OQ1mKjpgvD3hae6KSKQA4vI-J36_Lm-O3Fg4E7VPvASP2-qY_uMjojkKmwA7ZEMmBJorRayuOOQhhJCCfbfGTOTAJj0TYPky3_hk5nV6uUOocMe-Koo8-uKN-Gpm677_Eoq5azexrZcr6E4NXtdLWax0_IU0syq6mXRlSnAiknZ7TLWMVx_DbT8kSdw_gL6cLkPO0Waryr46if3gmb1hnTPQi8SQfvpkn4Bgn",
+      "domain": "goride-demo.vercel.app",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "app_sessionC2",
+      "value": "Cw3P0WzE6IPYeBMoorJfG6c0Xg845Ha0XObzegq252AU2OAmtHewVB3AacidWR4qYR_U0mKLRMrKaNtW3AjnObUkHO2gPahGqL4iAdhKQ-fO6tlzQnSv4k_ts-M9xJSH9jbzoyGC29WKOmra5AiJcuu4vqmXTKxdlG64DPYn-gdCsH1lWlDDXiujLWRKKIRpFO6TUfWch1mGDSut4tU-78ax4sqEgkPrCdmr1Xp0_3p6Vu1Btf_bpu6JfRgVLhYx5VTP1sZQ-RHTPEHEPf1MSRqEvJ4tiKUIG-wGzg5gj3sPSI50aESit4wNutdytql5qyYsgF86hwvjCJHf1aG9zkxotRPUwq2unwrT_VRYnOzUyLYvNGaSt5isfRUY6zzgPfxlJ2ralSDM4KoXHZ6rJGZSFfXweEoHlBYrZyqzA9GeRd-av7dNVDgVKhWWLsYOEr2FtHt75CaSSPqf9ia67pdJvk4BCjPwAYL98_dj4MewQQH38VLCABinwJK-GOCgJKp1aPvt9pVR7YxhBKjVA-6iQxsl7o94d7k2nHFfFI2o842yApEriZ9CjlOCNUWTHVr1MHEWd4QyZI7COwU54IQIAFCzz51X0oo3QeUIsWZW2gg7vrWJ5svCbZwUJ4568CxX8V0odm5WfkfLHam1JIbbitKKsSFkiUlOLkbNPY7ZBcNHGzJFoMUb7-iCwyAjJXqF0zey5KBhXMuzZ-fIBW-syE-svFd-VX2kq9f3sPh9teayiO3qtQMAMK6sRet-BGW6hLY3ScvTeWbVkMVVzIVDdT98HTiFrmJEoa2ypP1fZo-ofr3lR8QZpwS4TezzOKj91_k0PghyDdyz1LhbPhyDj-HE9t5u-8B4dyeJJzdsfHC1ZW-vVJDna5s7SnkaHZFDdeg1ujPo5J-zSPpqbqyLl3L0VwReECRes2o-dyQ",
+      "domain": "goride-demo.vercel.app",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "goride_role",
+      "value": "Driver",
+      "domain": "goride-demo.vercel.app",
+      "path": "/",
+      "expires": 1795427739.34507,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": []
+}

@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+
+
+tests/driver-selenium-tests/target
+
+
+ase_assignment/folder/node_modules
