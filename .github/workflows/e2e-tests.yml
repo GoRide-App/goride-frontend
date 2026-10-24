@@ -2,9 +2,9 @@ name: E2E Tests (Playwright)
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
   workflow_dispatch: # adds a "Run workflow" button in the Actions tab
 
 # Tests create real trips in the demo backend, so never run two pipelines at once
