@@ -104,6 +104,7 @@ test('settled live trips retain their payment namespace in persisted history and
     // The world is persisted as JSON and read back by reloads and other tabs.
     const restored = JSON.parse(JSON.stringify(state));
     const matching = module('lib/api/live-rider-matching.ts', {
+      '@/lib/ride-lifecycle': module('lib/ride-lifecycle.ts', {}),
       '@/lib/constants': {}, '@/components/ui/toast': {}, './live-matching': {},
       '@/lib/mock/world': { world: () => ({ get: () => restored }) },
     });
