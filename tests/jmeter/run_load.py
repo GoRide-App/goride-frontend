@@ -119,6 +119,8 @@ def main(argv=None):
     parser.add_argument("-Profile", "--profile", choices=("smoke", "load", "stress", "spike"), required=True)
     parser.add_argument("-BaseUrl", "--base-url")
     parser.add_argument("-JMeterHome", "--jmeter-home")
+    parser.add_argument("-ReportOnly", "--report-only", action="store_true",
+                        help="report SLA breaches without failing; JMeter or dashboard failures still fail")
     args = parser.parse_args(argv)
     try:
         properties = resolve_profile(args.profile, args.base_url)
@@ -154,9 +156,11 @@ def main(argv=None):
         print("JMeter did not produce the HTML dashboard; inspect jmeter.log.", file=sys.stderr)
         jmeter_status = 1
     # JMeter may return zero even when HTTP samples fail; always run the SLA gate.
-    gate_status = subprocess.run([sys.executable, str(HERE / "sla_gate.py"),
-                                  str(output / "results.jtl"), "--profile", args.profile,
-                                  "--run-config", str(run_config)], cwd=HERE).returncode
+    gate_command = [sys.executable, str(HERE / "sla_gate.py"), str(output / "results.jtl"),
+                    "--profile", args.profile, "--run-config", str(run_config)]
+    if args.report_only:
+        gate_command.append("--report-only")
+    gate_status = subprocess.run(gate_command, cwd=HERE).returncode
     if jmeter_status:
         print(f"JMeter exited with {jmeter_status}; inspect {output / 'jmeter.log'}", file=sys.stderr)
     return 1 if jmeter_status or gate_status else 0

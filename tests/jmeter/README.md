@@ -242,7 +242,10 @@ sizes can differ from the gate, so the gate is authoritative for these SLAs.
 
 ## CI
 
-`.github/workflows/load-test.yml` exposes **Load Test** under Actions. Manual
+`.github/workflows/load-test.yml` exposes **Load Test** under Actions. It runs
+next to CI and E2E on every push and pull request to `dev` and `main`: a smoke
+run in report-only mode (`-ReportOnly`), so SLA breaches show in the job summary
+without blocking merges. JMeter or dashboard failures still fail the job. Manual
 dispatch accepts `smoke` or `load`. Leave `base_url` blank to resolve the repository
 variable `TRIP_BASE_URL`, falling back to the live Azure trip-matching URL. A
 manual `load` needs an isolated target; the known live fallback is rejected.

@@ -1,6 +1,12 @@
 name: Load Test
 
+# Pushes and PRs to dev/main run a gentle live smoke next to CI and E2E. It is report-only:
+# the numbers land in the job summary without blocking merges. Manual and weekly runs gate.
 on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
   workflow_dispatch:
     inputs:
       profile:
@@ -32,12 +38,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      PROFILE: ${{ github.event_name == 'schedule' && 'smoke' || inputs.profile || 'smoke' }}
+      PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile || 'smoke' }}
       BASE_URL: ${{ inputs.base_url || vars.TRIP_BASE_URL || 'https://goride-trip-matching.lemonwave-a9e91265.indonesiacentral.azurecontainerapps.io' }}
-      JMETER_HOME: ${{ runner.temp }}/apache-jmeter-5.6.3
+      REPORT_ONLY: ${{ (github.event_name == 'push' || github.event_name == 'pull_request') && 'true' || 'false' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # The runner context is not available in job-level env, so set the path here.
+      - name: Locate JMeter
+        run: echo "JMETER_HOME=$RUNNER_TEMP/apache-jmeter-5.6.3" >> "$GITHUB_ENV"
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -112,7 +122,10 @@ jobs:
           PY
 
       - name: Run profile
-        run: bash tests/jmeter/run-load.sh -Profile "$PROFILE" -BaseUrl "$BASE_URL" -JMeterHome "$JMETER_HOME"
+        run: |
+          args=()
+          if [ "$REPORT_ONLY" = true ]; then args+=(-ReportOnly); fi
+          bash tests/jmeter/run-load.sh -Profile "$PROFILE" -BaseUrl "$BASE_URL" -JMeterHome "$JMETER_HOME" "${args[@]}"
 
       - name: Publish summary
         if: always()

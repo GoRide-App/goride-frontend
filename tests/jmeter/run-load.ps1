@@ -4,7 +4,8 @@ param(
     [ValidateSet('smoke', 'load', 'stress', 'spike')]
     [string]$Profile,
     [string]$BaseUrl,
-    [string]$JMeterHome
+    [string]$JMeterHome,
+    [switch]$ReportOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -19,6 +20,7 @@ if ($LASTEXITCODE -ne 0) {
 $runnerArgs = @((Join-Path $PSScriptRoot 'run_load.py'), '-Profile', $Profile)
 if ($BaseUrl) { $runnerArgs += @('-BaseUrl', $BaseUrl) }
 if ($JMeterHome) { $runnerArgs += @('-JMeterHome', $JMeterHome) }
+if ($ReportOnly) { $runnerArgs += '-ReportOnly' }
 # Java and JMeter print warnings on stderr; under 'Stop' Windows PowerShell would treat them as
 # fatal, so the runner's own exit code decides the result instead.
 $ErrorActionPreference = 'Continue'

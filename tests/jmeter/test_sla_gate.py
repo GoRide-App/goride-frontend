@@ -247,6 +247,31 @@ class RunnerExecutionTests(unittest.TestCase):
                     config = json.loads(config_path.read_text(encoding="utf-8"))
                     self.assertEqual(config["properties"], properties)
 
+    def test_report_only_is_passed_to_gate_but_jmeter_failure_still_fails(self):
+        for jmeter_status, expected in ((0, 0), (1, 1)):
+            with self.subTest(jmeter=jmeter_status), fixture_directory() as directory:
+                properties = run_load.resolve_profile("smoke")
+                calls = []
+
+                def fake_run(command, **kwargs):
+                    calls.append(command)
+                    if "-n" in command:
+                        shutil.copyfile(FIXTURES / "breach.jtl", Path(command[command.index("-l") + 1]))
+                        report = Path(command[command.index("-o") + 1])
+                        report.mkdir()
+                        (report / "index.html").write_text("offline stub", encoding="utf-8")
+                        return subprocess.CompletedProcess(command, jmeter_status)
+                    return subprocess.CompletedProcess(command, 0)  # the gate exits 0 in report-only mode
+
+                with (patch.object(run_load, "HERE", directory),
+                      patch.object(run_load, "resolve_profile", return_value=properties),
+                      patch.object(run_load, "find_tools", return_value=("jmeter", {})),
+                      patch.object(run_load.subprocess, "run", side_effect=fake_run),
+                      redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO())):
+                    status = run_load.main(["-Profile", "smoke", "-ReportOnly"])
+                self.assertEqual(status, expected)
+                self.assertIn("--report-only", calls[1])
+
     def test_missing_tool_fails_before_jmeter(self):
         with (patch.object(run_load, "find_tools", side_effect=ValueError("JMeter is missing")),
               patch.object(run_load.subprocess, "run") as execute,
