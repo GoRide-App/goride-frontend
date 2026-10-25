@@ -41,6 +41,13 @@ local trip bridge with controlled responses and timers. Verify with `npx tsc --n
 `npx eslint src`, and `npm test`. If test worker spawning is blocked, run
 `node --test --test-isolation=none tests/unit/*.test.mjs` for that run only.
 
+## SE3112 testing pipeline: who did what
+
+<!-- One row per team member: role, owner, where it lives, how it runs. -->
+| Role | Owner | Where | How it runs |
+| --- | --- | --- | --- |
+| Load & Performance Testing | Shageeshan T (IT24103322) | `tests/jmeter/`, `.github/workflows/load-test.yml` | **Load Test** workflow on every push/PR to `dev`/`main` (report-only live smoke); manual dispatch for heavier profiles. Setup and commands: `tests/jmeter/README.md` |
+
 ## CI
 
 The `CI` workflow runs on pull requests and pushes to `dev`/`main`, and can
