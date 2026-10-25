@@ -1,0 +1,151 @@
+name: Load Test
+
+# Pushes and PRs to dev/main run a gentle live smoke next to CI and E2E. It is report-only:
+# the numbers land in the job summary without blocking merges. Manual and weekly runs gate.
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Profile (load requires an isolated staging target)
+        type: choice
+        options: [smoke, load]
+        default: smoke
+      base_url:
+        description: Target origin; blank uses TRIP_BASE_URL or the live Azure smoke target
+        type: string
+        default: ''
+  schedule:
+    - cron: '0 2 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trip-load-test
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  load-test:
+    name: Load Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile || 'smoke' }}
+      BASE_URL: ${{ inputs.base_url || vars.TRIP_BASE_URL || 'https://goride-trip-matching.lemonwave-a9e91265.indonesiacentral.azurecontainerapps.io' }}
+      REPORT_ONLY: ${{ (github.event_name == 'push' || github.event_name == 'pull_request') && 'true' || 'false' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # The runner context is not available in job-level env, so set the path here.
+      - name: Locate JMeter
+        run: echo "JMETER_HOME=$RUNNER_TEMP/apache-jmeter-5.6.3" >> "$GITHUB_ENV"
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Cache JMeter
+        id: jmeter-cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.JMETER_HOME }}
+          key: ${{ runner.os }}-apache-jmeter-5.6.3
+
+      - name: Download JMeter
+        if: steps.jmeter-cache.outputs.cache-hit != 'true'
+        working-directory: ${{ runner.temp }}
+        run: |
+          archive=apache-jmeter-5.6.3.tgz
+          url=https://archive.apache.org/dist/jmeter/binaries
+          curl --fail --location --retry 3 --output "$archive" "$url/$archive"
+          curl --fail --location --retry 3 --output "$archive.sha512" "$url/$archive.sha512"
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          import re
+          archive = Path('apache-jmeter-5.6.3.tgz')
+          expected = re.findall(r'\b[0-9a-fA-F]{128}\b', archive.with_suffix('.tgz.sha512').read_text())
+          with archive.open('rb') as stream:
+              actual = hashlib.file_digest(stream, 'sha512').hexdigest()
+          if len(expected) != 1 or actual != expected[0].lower():
+              raise SystemExit('JMeter SHA-512 verification failed')
+          PY
+          tar -xzf "$archive"
+
+      - name: Test SLA gate
+        run: python3 -m unittest discover -s tests/jmeter -p 'test_*.py' -v
+
+      # Azure can scale to zero. Keep cold-start time out of the measured run.
+      - name: Warm target
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+          import time
+          import urllib.error
+          import urllib.request
+          sys.path.insert(0, 'tests/jmeter')
+          from run_load import resolve_profile
+
+          resolve_profile(os.environ['PROFILE'], os.environ['BASE_URL'])
+          url = os.environ['BASE_URL'].rstrip('/') + '/health'
+          deadline = time.monotonic() + 120
+          while time.monotonic() < deadline:
+              try:
+                  with urllib.request.urlopen(url, timeout=min(8, deadline - time.monotonic())) as response:
+                      body = response.read(65536).decode('utf-8', errors='replace')
+                      if response.status == 200 and re.search(r'\bhealthy\b', body, re.I):
+                          print('Target is healthy.')
+                          break
+              except (urllib.error.URLError, TimeoutError, OSError):
+                  pass
+              time.sleep(max(0, min(5, deadline - time.monotonic())))
+          else:
+              sys.exit('Target did not become healthy within 120 seconds.')
+          PY
+
+      - name: Run profile
+        run: |
+          args=()
+          if [ "$REPORT_ONLY" = true ]; then args+=(-ReportOnly); fi
+          bash tests/jmeter/run-load.sh -Profile "$PROFILE" -BaseUrl "$BASE_URL" -JMeterHome "$JMETER_HOME" "${args[@]}"
+
+      - name: Publish summary
+        if: always()
+        run: |
+          shopt -s nullglob
+          summaries=(tests/jmeter/results/*/summary.md)
+          if (( ${#summaries[@]} )); then
+            for summary in "${summaries[@]}"; do
+              cat "$summary" >> "$GITHUB_STEP_SUMMARY"
+            done
+          else
+            echo 'No performance summary was produced; inspect the setup/warm-up steps.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # Keep the dashboard and logs when the SLA gate fails too.
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: trip-performance-${{ env.PROFILE }}-${{ github.run_id }}
+          path: tests/jmeter/results/
+          if-no-files-found: warn
+          retention-days: 14

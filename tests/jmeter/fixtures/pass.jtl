@@ -1,0 +1,6 @@
+timeStamp,elapsed,label,responseCode,success,allThreads,Latency,Connect
+1000000,800,fare: happy path,200,true,3,700,10
+1001000,300,health,200,true,3,250,10
+1002000,50,fare: invalid input -> 400,400,true,3,40,10
+1010000,100,fare: happy path,200,true,3,90,0
+1011000,100,health,200,true,3,90,0
